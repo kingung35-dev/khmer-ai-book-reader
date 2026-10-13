@@ -1,6 +1,6 @@
 // Service Worker for Khmer AI Book Reader PWA
-// Version: v2.3.1
-const CACHE_NAME = 'khmer-ai-reader-v2.3.1';
+// Version: v2.3.2
+const CACHE_NAME = 'khmer-ai-reader-v2.3.2';
 
 const STATIC_ASSETS = [
   '/',
