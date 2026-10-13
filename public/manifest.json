@@ -1,0 +1,31 @@
+{
+  "name": "Khmer AI Book Reader — កម្មវិធីអានសៀវភៅ PDF",
+  "short_name": "Khmer Reader",
+  "description": "កម្មវិធីអានសៀវភៅ PDF ជាភាសាខ្មែរ ជាមួយបច្ចេកវិទ្យា AI Google Gemini ឆ្លាតវៃ",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#111827",
+  "theme_color": "#111827",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/app-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

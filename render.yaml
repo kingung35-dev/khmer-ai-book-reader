@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: khmer-ai-book-reader
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      - key: AI_MODEL
+        value: gemini-3.8-flash
+      - key: AI_MAX_TOKENS
+        value: 8192
+      - key: AI_TIMEOUT_MS
+        value: 60000
+      - key: AI_DEFAULT_LANGUAGE
+        value: km
+      - key: ENABLE_OCR
+        value: true
+      - key: GEMINI_API_KEY
+        sync: false

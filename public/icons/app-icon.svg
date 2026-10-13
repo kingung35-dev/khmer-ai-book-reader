@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e3a8a"/>
+      <stop offset="50%" stop-color="#2563eb"/>
+      <stop offset="100%" stop-color="#0891b2"/>
+    </linearGradient>
+    <linearGradient id="bookGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#e2e8f0"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#000000" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+
+  <!-- Background with rounded corners -->
+  <rect width="512" height="512" rx="112" fill="url(#bgGrad)"/>
+
+  <!-- Outer Glow Ring -->
+  <rect x="16" y="16" width="480" height="480" rx="96" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="4"/>
+
+  <!-- Open Book Illustration -->
+  <g filter="url(#shadow)" transform="translate(64, 110)">
+    <!-- Book Left Page -->
+    <path d="M 192 240 C 120 200 40 210 16 220 L 16 60 C 48 50 120 40 192 80 Z" fill="url(#bookGrad)"/>
+    
+    <!-- Book Right Page -->
+    <path d="M 192 240 C 264 200 344 210 368 220 L 368 60 C 336 50 264 40 192 80 Z" fill="url(#bookGrad)"/>
+
+    <!-- Book Spine Center -->
+    <path d="M 192 80 L 192 240" stroke="#cbd5e1" stroke-width="6" stroke-linecap="round"/>
+
+    <!-- Decorative Text Lines Left -->
+    <line x1="48" y1="90" x2="160" y2="90" stroke="#94a3b8" stroke-width="5" stroke-linecap="round"/>
+    <line x1="48" y1="120" x2="160" y2="120" stroke="#94a3b8" stroke-width="5" stroke-linecap="round"/>
+    <line x1="48" y1="150" x2="140" y2="150" stroke="#94a3b8" stroke-width="5" stroke-linecap="round"/>
+
+    <!-- Decorative Text Lines Right -->
+    <line x1="224" y1="90" x2="336" y2="90" stroke="#94a3b8" stroke-width="5" stroke-linecap="round"/>
+    <line x1="224" y1="120" x2="336" y2="120" stroke="#94a3b8" stroke-width="5" stroke-linecap="round"/>
+    <line x1="224" y1="150" x2="300" y2="150" stroke="#94a3b8" stroke-width="5" stroke-linecap="round"/>
+
+    <!-- AI Sparkle / Star in Center Top -->
+    <g transform="translate(192, 40)">
+      <circle cx="0" cy="0" r="28" fill="#fbbf24"/>
+      <!-- Sparkle cross -->
+      <path d="M 0 -22 L 5 -5 L 22 0 L 5 5 L 0 22 L -5 5 L -22 0 L -5 -5 Z" fill="#ffffff"/>
+    </g>
+  </g>
+
+  <!-- Khmer Typography Symbol on Front Bottom -->
+  <text x="256" y="420" text-anchor="middle" font-family="-apple-system, 'Kantumruy Pro', 'Noto Sans Khmer', sans-serif" font-weight="700" font-size="44" fill="#ffffff" letter-spacing="1">
+    Khmer AI Reader
+  </text>
+</svg>

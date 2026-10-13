@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="km" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover">
+  <meta name="referrer" content="no-referrer">
+  <meta name="description" content="Khmer AI Book Reader — កម្មវិធីអានសៀវភៅ PDF ជាភាសាខ្មែរ ជាមួយបច្ចេកវិទ្យា AI Google Gemini ឆ្លាតវៃ និងមានសមត្ថភាពខ្ពស់">
+  <meta name="theme-color" content="#111827">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Khmer AI Reader">
+  <title>Khmer AI Book Reader — កម្មវិធីអានសៀវភៅ PDF ជាភាសាខ្មែរ</title>
+  
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/svg+xml" href="icons/app-icon.svg">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  
+  <link rel="stylesheet" href="css/styles.css">
+  
+  <!-- PDF.js & Marked scripts -->
+  <script src="libs/pdfjs/pdf.min.js"></script>
+  <script src="libs/marked.min.js"></script>
+</head>
+<body>
+  <div class="app-container">
+    
+    <!-- Header Toolbar -->
+    <header class="app-header">
+      <!-- Left: Sidebar Toggle & Branding -->
+      <div class="header-left">
+        <button id="btn-toggle-library" class="btn-icon" title="បិទ/បើក បណ្ណាល័យសៀវភៅ (Toggle Library)">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+        </button>
+
+        <div class="brand-wrapper" id="btn-brand-home">
+          <div class="brand-icon">📖</div>
+          <div class="brand-text">
+            <h1 class="brand-title">Khmer AI Reader</h1>
+            <span class="brand-subtitle">កម្មវិធីអានសៀវភៅខ្មែរ</span>
+          </div>
+        </div>
+
+        <button id="btn-header-upload" class="btn-primary-header" title="បញ្ចូលសៀវភៅ PDF ថ្មី (Upload New Book)">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          <span>បញ្ចូលសៀវភៅថ្មី</span>
+        </button>
+      </div>
+
+      <!-- Center: Reader Navigation & Zoom Controls -->
+      <div class="header-center" id="reader-toolbar-center">
+        <!-- Page Navigation Group -->
+        <div class="toolbar-group">
+          <button id="btn-prev-page" class="btn-icon" title="ទំព័រមុន (Previous Page) [←]">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+          </button>
+          
+          <div class="page-jump-container">
+            <input type="number" id="input-current-page" class="page-input" value="1" min="1">
+            <span class="page-separator">/</span>
+            <span id="label-total-pages" class="page-total">1</span>
+          </div>
+
+          <button id="btn-next-page" class="btn-icon" title="ទំព័របន្ទាប់ (Next Page) [→]">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+          </button>
+        </div>
+
+        <!-- Zoom Group -->
+        <div class="toolbar-group">
+          <button id="btn-zoom-out" class="btn-icon" title="បង្រួម (Zoom Out) [-]">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </button>
+          
+          <select id="select-zoom" class="zoom-select" title="ទំហំពង្រីក (Zoom Level)">
+            <option value="auto">ស្វ័យប្រវត្តិ (Auto)</option>
+            <option value="page-fit">ពេញទំព័រ (Fit Page)</option>
+            <option value="page-width" selected>ពេញទទឹង (Fit Width)</option>
+            <option value="0.75">75%</option>
+            <option value="1.0">100%</option>
+            <option value="1.25">125%</option>
+            <option value="1.5">150%</option>
+            <option value="2.0">200%</option>
+          </select>
+
+          <button id="btn-zoom-in" class="btn-icon" title="ពង្រីក (Zoom In) [+]">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </button>
+        </div>
+
+        <!-- View Mode (Single Page vs Continuous Scroll) -->
+        <div class="toolbar-group">
+          <button id="btn-view-mode" class="btn-icon" title="ប្តូរទម្រង់អាន (Single / Continuous Mode)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/></svg>
+          </button>
+        </div>
+
+        <!-- PDF Text Search Box -->
+        <div class="search-wrapper">
+          <input type="text" id="input-pdf-search" class="search-input-header" placeholder="ស្វែងរកក្នុងសៀវភៅ... [Ctrl+F]">
+          <span id="label-search-matches" class="search-match-count"></span>
+          <button id="btn-search-prev" class="btn-icon" style="display:none;" title="ពាក្យមុន">▲</button>
+          <button id="btn-search-next" class="btn-icon" style="display:none;" title="ពាក្យបន្ទាប់">▼</button>
+        </div>
+      </div>
+
+      <!-- Right: Document Actions, Settings, and AI Toggle -->
+      <div class="header-right">
+        <button id="btn-read-page-aloud" class="btn-icon" title="អានទំព័រនេះជាសំឡេង (Read Page Aloud)">
+          <span style="font-size: 1.15rem;">🔊</span>
+        </button>
+
+        <button id="btn-add-bookmark" class="btn-icon" title="ចំណាំទំព័រនេះ (Add Bookmark)">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+        </button>
+
+        <button id="btn-fullscreen" class="btn-icon" title="ពេញអេក្រង់ (Fullscreen)">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+        </button>
+
+        <button id="btn-download-pdf" class="btn-icon" title="ទាញយកឯកសារដើម (Download PDF)">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        </button>
+
+        <button id="btn-toggle-theme" class="btn-icon" title="ប្តូរពន្លឺ / ងងឹត (Theme Toggle)">
+          <span id="theme-icon">🌙</span>
+        </button>
+
+        <button id="btn-open-settings" class="btn-icon" title="ការកំណត់ប្រព័ន្ធ & AI (Settings)">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </button>
+
+        <button id="btn-toggle-ai" class="btn-icon active" title="បិទ/បើក ជំនួយការ AI (Toggle AI Assistant)">
+          <span style="font-size: 1.15rem;">🤖</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Workspace -->
+    <main class="main-workspace">
+      
+      <!-- Left Sidebar (Library / Outline / Bookmarks) -->
+      <aside class="sidebar-left" id="sidebar-left">
+        <div class="sidebar-tabs">
+          <button class="tab-btn active" data-tab="tab-library" id="tab-btn-library">📚 បណ្ណាល័យ</button>
+          <button class="tab-btn" data-tab="tab-thumbnails" id="tab-btn-thumbnails">📑 ទំព័រតូចៗ</button>
+          <button class="tab-btn" data-tab="tab-bookmarks" id="tab-btn-bookmarks">🔖 ចំណាំ</button>
+        </div>
+
+        <!-- Tab 1: Library -->
+        <div class="tab-content active" id="tab-library">
+          <div class="library-header">
+            <input type="text" id="input-search-library" class="search-books-input" placeholder="ស្វែងរកចំណងជើងសៀវភៅ...">
+            
+            <div class="library-actions">
+              <button id="btn-upload-trigger" class="btn-upload">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                បន្ថែមសៀវភៅ
+              </button>
+              <input type="file" id="file-upload-input" accept=".pdf,application/pdf" style="display:none;">
+
+              <select id="select-sort-books" class="sort-select">
+                <option value="recent">ថ្មីបំផុត</option>
+                <option value="title">តាមចំណងជើង</option>
+                <option value="pages">ទំព័រច្រើន</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="book-list" id="library-book-list">
+            <!-- Rendered dynamically -->
+          </div>
+        </div>
+
+        <!-- Tab 2: Thumbnails -->
+        <div class="tab-content" id="tab-thumbnails">
+          <div class="thumbnails-grid" id="thumbnails-container">
+            <!-- Rendered dynamically -->
+          </div>
+        </div>
+
+        <!-- Tab 3: Bookmarks & Notes -->
+        <div class="tab-content" id="tab-bookmarks">
+          <div style="font-weight: 600; font-size: 0.88rem; margin-bottom: 6px;">ចំណាំទំព័រ (Bookmarks)</div>
+          <div id="bookmarks-list" style="display: flex; flex-direction: column; gap: 6px;">
+            <div style="color: var(--text-tertiary); font-size: 0.82rem;">មិនទាន់មានចំណាំនៅឡើយទេ</div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Center PDF Reader Viewport -->
+      <section class="reader-container" id="reader-container">
+        <!-- Scanned Page Warning / OCR Trigger Banner -->
+        <div class="scanned-banner" id="scanned-page-banner">
+          <span>⚠️ ទំព័រនេះជារូបភាពស្កេនដែលគ្មានអក្សរស្រង់ស្រាប់។ តើអ្នកចង់ប្រើ Khmer OCR ទេ?</span>
+          <button class="btn-trigger-ocr" id="btn-run-ocr">🔍 ស្កេនអក្សរខ្មែរ (OCR)</button>
+        </div>
+
+        <!-- PDF Pages Viewport -->
+        <div class="pdf-viewport" id="pdf-viewport">
+          <!-- Rendered PDF Pages go here -->
+
+          <!-- Reader Empty State when no book opened -->
+          <div class="reader-empty-state" id="reader-empty-state">
+            <div class="empty-icon">📚</div>
+            <h2 class="empty-title">សូមស្វាគមន៍មកកាន់ Khmer AI Book Reader</h2>
+            <p class="empty-subtitle">ជ្រើសរើសសៀវភៅពីបណ្ណាល័យ ឬទម្លាក់ឯកសារ PDF នៅទីនេះដើម្បីចាប់ផ្តើមអាន និងសាកសួរ AI ជាភាសាខ្មែរ។</p>
+            
+            <div class="dropzone-box" id="reader-dropzone">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color: var(--accent-primary);"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              <div style="font-weight: 600;">ចុចដើម្បីជ្រើសរើស PDF ឬអូសទម្លាក់ទីនេះ</div>
+              <div style="font-size: 0.78rem; color: var(--text-tertiary);">គាំទ្រឯកសារ PDF ជាភាសាខ្មែរ និងអង់គ្លេស រហូតដល់ 50MB</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Floating AI Selection Toolbar (Appears on highlight) -->
+        <div class="selection-toolbar" id="selection-toolbar">
+          <button class="selection-btn primary" id="btn-sel-ask">✨ សួរ AI</button>
+          <button class="selection-btn" id="btn-sel-speak">🔊 អាន</button>
+          <button class="selection-btn" id="btn-sel-summarize">📝 សង្ខេប</button>
+          <button class="selection-btn" id="btn-sel-explain">💡 ពន្យល់</button>
+          <button class="selection-btn" id="btn-sel-translate">🌐 បកប្រែ</button>
+          <button class="selection-btn" id="btn-sel-define">📖 ពាក្យពិបាក</button>
+          <button class="selection-btn" id="btn-sel-copy">📋 ចម្លង</button>
+        </div>
+      </section>
+
+      <!-- Right Sidebar (AI Reading Assistant) -->
+      <aside class="sidebar-right" id="sidebar-right">
+        <!-- AI Header -->
+        <div class="ai-header">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-weight: 600; font-size: 0.92rem;">🤖 ជំនួយការ AI</span>
+            <span class="ai-status-pill" id="ai-status-pill">Gemini 3.8 Flash</span>
+          </div>
+
+          <button id="btn-clear-chat" class="btn-icon" title="សម្អាតការសន្ទនា (Clear Chat)">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+          </button>
+        </div>
+
+        <!-- Scope selector: Whole Book vs Current Page -->
+        <div class="ai-scope-toggle">
+          <button class="scope-btn active" id="btn-scope-book" data-scope="book">📖 សៀវភៅទាំងមូល</button>
+          <button class="scope-btn" id="btn-scope-page" data-scope="page">📄 ទំព័របច្ចុប្បន្ន (<span id="label-scope-current-page">1</span>)</button>
+        </div>
+
+        <!-- Quick Action Chips -->
+        <div class="quick-actions-bar">
+          <button class="action-chip" data-action="summarize">📝 សង្ខេបទំព័រនេះ</button>
+          <button class="action-chip" data-action="explain">💡 ពន្យល់ខ្លឹមសារ</button>
+          <button class="action-chip" data-action="translate">🌐 បកប្រែ</button>
+          <button class="action-chip" data-action="define">📖 ពន្យល់ពាក្យពិបាក</button>
+          <button class="action-chip" data-action="generate_qa">❓ សំណួរ-ចម្លើយ</button>
+          <button class="action-chip" data-action="generate_quiz">🎯 លំហាត់ Quiz</button>
+          <button class="action-chip" data-action="summarize_chapter">🔍 សង្ខេបជំពូក</button>
+        </div>
+
+        <!-- Chat Stream -->
+        <div class="chat-messages" id="chat-messages-container">
+          <!-- Default Welcome Message -->
+          <div class="chat-message assistant">
+            <div class="message-bubble">
+              <p>សួស្តី! ខ្ញុំជាជំនួយការ AI អានសៀវភៅជាភាសាខ្មែរ។ 🇰🇭</p>
+              <p>ខ្ញុំអាចជួយអ្នកក្នុងការ៖</p>
+              <ul>
+                <li>ឆ្លើយសំណួរផ្អែកលើខ្លឹមសារសៀវភៅ (RAG Grounding)</li>
+                <li>សង្ខេបខ្លឹមសារទំព័រ ឬជំពូក</li>
+                <li>ពន្យល់ពាក្យបច្ចេកទេស ឬពាក្យពិបាក</li>
+                <li>បង្កើតសំណួរ-ចម្លើយ និងលំហាត់សម្រាប់រៀន</li>
+              </ul>
+              <p>សូមជ្រើសរើសសៀវភៅមួយដើម្បីចាប់ផ្តើមសាកសួរ!</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Chat Input Form -->
+        <div class="chat-input-area">
+          <div class="chat-input-box">
+            <textarea id="chat-textarea" class="chat-textarea" placeholder="សួរសំណួរអំពីសៀវភៅនេះ... (Enter ដើម្បីផ្ញើ)"></textarea>
+            
+            <div class="chat-input-toolbar">
+              <span class="chat-input-hint">ចុច Shift + Enter ដើម្បីចុះបន្ទាត់</span>
+              
+              <button id="btn-send-chat" class="btn-send" title="ផ្ញើសំណួរ (Send)">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+    </main>
+
+    <!-- Settings Modal -->
+    <div class="modal-overlay" id="modal-settings">
+      <div class="modal-dialog">
+        <div class="modal-header">
+          <h3 class="modal-title">⚙️ ការកំណត់ប្រព័ន្ធ & AI</h3>
+          <button class="btn-icon" id="btn-close-settings-x">✕</button>
+        </div>
+        
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label" for="setting-gemini-key">Google Gemini API Key:</label>
+            <div class="input-password-wrapper">
+              <input type="password" id="setting-gemini-key" class="form-input" placeholder="AIzaSy...">
+              <button type="button" id="btn-toggle-key-visibility" class="toggle-password-btn">👁️</button>
+            </div>
+            <span class="form-help">
+              អ្នកអាចបង្កើត API Key ដោយឥតគិតថ្លៃពីរ 
+              <a href="https://aistudio.google.com/" target="_blank" rel="noopener" style="color: var(--accent-primary);">Google AI Studio</a>។
+              កូនសោត្រូវបានរក្សាទុកដោយសុវត្ថិភាពនៅលើ Server របស់អ្នក។
+            </span>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="setting-model-select">ម៉ូឌែល AI (Model):</label>
+            <select id="setting-model-select" class="form-select">
+              <option value="gemini-3.5-flash" selected>Gemini 3.5 Flash (ស្ថិរភាព & ឆ្លើយតបរហ័ស - ណែនាំ)</option>
+              <option value="gemini-3.5-flash-lite">Gemini 3.5 Flash-Lite (ល្បឿនលឿន)</option>
+              <option value="gemini-3.8-flash">Gemini 3.8 Flash (ជំនាន់ចុងក្រោយ)</option>
+              <option value="gemini-3.7-flash">Gemini 3.7 Flash</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="setting-lang-select">ភាសាឆ្លើយតបរបស់ AI:</label>
+            <select id="setting-lang-select" class="form-select">
+              <option value="km">ភាសាខ្មែរ (Khmer - ណែនាំ)</option>
+              <option value="en">English</option>
+              <option value="auto">តាមភាសាសៀវភៅ (Same as Book)</option>
+            </select>
+          </div>
+
+          <!-- Mobile Phone Access Card -->
+          <div class="mobile-access-card" id="mobile-access-card">
+            <div class="mobile-card-header">
+              <span style="font-size: 1.1rem;">📱</span>
+              <strong style="color: var(--text-primary); font-size: 0.88rem;">ប្រើប្រាស់លើទូរស័ព្ទដៃ (Mobile Access):</strong>
+            </div>
+            <p class="mobile-card-desc">
+              ភ្ជាប់ទូរស័ព្ទដៃរបស់អ្នក (iPhone ឬ Android) ទៅកាន់ Wi-Fi តែមួយជាមួយកុំព្យូទ័រ Mac រួចបើក Safari ឬ Chrome ដោយវាយអាសយដ្ឋាន៖
+            </p>
+            <div class="mobile-url-box">
+              <code id="mobile-network-url" class="mobile-url-code">កំពុងស្វែងរក...</code>
+              <button type="button" id="btn-copy-mobile-url" class="btn-copy-url" title="ចម្លង Link">📋 ចម្លង</button>
+            </div>
+          </div>
+
+          <!-- Test connection status -->
+          <div id="test-connection-result" style="display: none; padding: 10px; border-radius: var(--radius-sm); font-size: 0.82rem;"></div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary" id="btn-test-connection">🧪 សាកល្បងតភ្ជាប់ (Test)</button>
+          <button type="button" class="btn-secondary" id="btn-close-settings">បោះបង់</button>
+          <button type="button" class="btn-primary" id="btn-save-settings">💾 រក្សាទុកការកំណត់</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Upload Book Modal -->
+    <div class="modal-overlay" id="modal-upload-book">
+      <div class="modal-dialog upload-dialog">
+        <div class="modal-header">
+          <h3 class="modal-title">📚 បញ្ចូលសៀវភៅ PDF ថ្មី</h3>
+          <button class="btn-icon" id="btn-close-upload-x">✕</button>
+        </div>
+        
+        <div class="modal-body">
+          <!-- Dropzone Area -->
+          <div class="upload-dropzone" id="modal-upload-dropzone">
+            <div class="upload-dropzone-inner">
+              <div class="upload-icon-circle">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              </div>
+              <div class="upload-prompt-text">
+                <strong>អូសទម្លាក់ឯកសារ PDF ទីនេះ</strong> ឬ <span class="upload-browse-link">ជ្រើសរើសពីឧបករណ៍</span>
+              </div>
+              <div class="upload-hint">គាំទ្រឯកសារ PDF ជាភាសាខ្មែរ ឬអង់គ្លេស (ទំហំអតិបរមា 50 MB)</div>
+            </div>
+            <input type="file" id="modal-file-input" accept=".pdf,application/pdf" style="display:none;">
+          </div>
+
+          <!-- Selected File Card (shown when a file is chosen) -->
+          <div class="selected-file-card" id="selected-file-card" style="display: none;">
+            <div class="file-icon-badge">📄</div>
+            <div class="selected-file-info">
+              <div class="selected-file-name" id="selected-file-name">filename.pdf</div>
+              <div class="selected-file-size" id="selected-file-size">0 MB</div>
+            </div>
+            <button type="button" class="btn-icon btn-remove-file" id="btn-remove-selected-file" title="ជ្រើសរើសឯកសារផ្សេង">✕</button>
+          </div>
+
+          <!-- Custom Title Input -->
+          <div class="form-group" id="group-custom-title" style="display: none;">
+            <label class="form-label" for="input-book-custom-title">ចំណងជើងសៀវភៅ (Book Title):</label>
+            <input type="text" id="input-book-custom-title" class="form-input" placeholder="បញ្ចូលចំណងជើងសៀវភៅ...">
+            <span class="form-help">អ្នកអាចកែសម្រួលចំណងជើងឱ្យងាយស្រួលចំណាំ និងស្វែងរកក្នុងបណ្ណាល័យ។</span>
+          </div>
+
+          <!-- Upload & Processing Progress Bar -->
+          <div class="upload-progress-wrapper" id="upload-progress-wrapper" style="display: none;">
+            <div class="progress-status-row">
+              <span class="progress-status-text" id="upload-status-text">កំពុងផ្ទុកឡើងឯកសារ...</span>
+              <span class="progress-status-percent" id="upload-status-percent">0%</span>
+            </div>
+            <div class="progress-bar-track">
+              <div class="progress-bar-fill" id="upload-progress-fill" style="width: 0%;"></div>
+            </div>
+            <div class="progress-step-indicator" id="upload-step-indicator">
+              ជំហានទី ១/២: កំពុងបញ្ជូនឯកសារ PDF ទៅកាន់ Server...
+            </div>
+          </div>
+
+          <!-- Error / Notice Box -->
+          <div class="upload-alert-box" id="upload-alert-box" style="display: none;"></div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary" id="btn-cancel-upload">បោះបង់</button>
+          <button type="button" class="btn-primary" id="btn-submit-upload" disabled>
+            <span>🚀 បញ្ចូលនិងបើកអាន</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Mobile Drawer Backdrop (tapping closes open drawer on phone) -->
+    <div class="mobile-drawer-backdrop" id="mobile-drawer-backdrop"></div>
+
+    <!-- Mobile Bottom Navigation Bar (Visible on phones and small screens <= 768px) -->
+    <nav class="mobile-bottom-bar" id="mobile-bottom-bar">
+      <button class="mobile-nav-btn" id="btn-mobile-nav-library" title="បណ្ណាល័យ (Library)">
+        <span class="mobile-nav-icon">📚</span>
+        <span class="mobile-nav-label">បណ្ណាល័យ</span>
+      </button>
+
+      <button class="mobile-nav-btn" id="btn-mobile-prev-page" title="ទំព័រមុន (Prev Page)">
+        <span class="mobile-nav-icon">◀</span>
+        <span class="mobile-nav-label">មុន</span>
+      </button>
+
+      <div class="mobile-page-counter" id="mobile-page-counter-box" title="ចុចដើម្បីប្តូរទំព័រ (Jump to Page)">
+        <span id="mobile-current-page">1</span>
+        <span class="mobile-page-slash">/</span>
+        <span id="mobile-total-pages">1</span>
+      </div>
+
+      <button class="mobile-nav-btn" id="btn-mobile-next-page" title="ទំព័របន្ទាប់ (Next Page)">
+        <span class="mobile-nav-icon">▶</span>
+        <span class="mobile-nav-label">បន្ទាប់</span>
+      </button>
+
+      <button class="mobile-nav-btn" id="btn-mobile-read-aloud" title="អានជាសំឡេង (Read Aloud)">
+        <span class="mobile-nav-icon">🔊</span>
+        <span class="mobile-nav-label">សំឡេង</span>
+      </button>
+
+      <button class="mobile-nav-btn primary" id="btn-mobile-nav-ai" title="ជំនួយការ AI (AI Assistant)">
+        <span class="mobile-nav-icon">🤖</span>
+        <span class="mobile-nav-label">AI</span>
+      </button>
+    </nav>
+
+    <!-- Toast Notifications Container -->
+    <div class="toast-container" id="toast-container"></div>
+
+  </div>
+
+  <!-- Application Modules -->
+  <script src="js/settings.js"></script>
+  <script src="js/library.js"></script>
+  <script src="js/pdf-reader.js"></script>
+  <script src="js/ai-assistant.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
