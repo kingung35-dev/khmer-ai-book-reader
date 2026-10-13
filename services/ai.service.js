@@ -115,14 +115,18 @@ class AIService {
   /**
    * Execute generateContent with automatic retry on 503/429 and fallback to healthy alternative models
    */
+  /**
+   * Execute generateContent with automatic retry on 503/429 and fallback to healthy alternative models
+   */
   async generateWithRetryAndFallback(prompt, targetModel = null) {
-    const primaryModel = targetModel || aiConfig.model || 'gemini-3.5-flash';
+    const primaryModel = targetModel || aiConfig.model || 'gemini-flash-lite-latest';
     const candidateModels = [
       primaryModel,
-      'gemini-3.5-flash',
-      'gemini-3.5-flash-lite',
+      'gemini-flash-lite-latest',
+      'gemini-3.7-flash',
+      'gemini-flash-latest',
       'gemini-3.8-flash',
-      'gemini-3.7-flash'
+      'gemini-3.5-flash'
     ];
     const modelsToTry = [...new Set(candidateModels)];
 
@@ -175,8 +179,8 @@ class AIService {
       return { success: false, message: 'សូមបញ្ចូល API Key ជាមុនសិន (Please enter an API Key)' };
     }
 
-    const preferredModel = modelOverride || aiConfig.model || 'gemini-3.8-flash';
-    const modelsToTry = [preferredModel, 'gemini-3.7-flash', 'gemini-flash-latest'];
+    const preferredModel = modelOverride || aiConfig.model || 'gemini-flash-lite-latest';
+    const modelsToTry = [preferredModel, 'gemini-flash-lite-latest', 'gemini-3.7-flash', 'gemini-flash-latest', 'gemini-3.8-flash'];
     const uniqueModels = [...new Set(modelsToTry)];
 
     const genAI = new GoogleGenerativeAI(key);
@@ -218,13 +222,22 @@ class AIService {
       ? 'Respond strictly in English.'
       : 'សូមឆ្លើយតបជាភាសាខ្មែរសុទ្ធសាធ ១០០% ឲ្យបានក្បោះក្បាយ ពិរោះ និងត្រឹមត្រូវតាមក្បួនវេយ្យាករណ៍ខេមរភាសា ដោយដាច់ខាតមិនប្រើប្រាស់ភាសាអង់គ្លេសឡើយ (រាល់ពាក្យបច្ចេកទេសត្រូវបកប្រែ និងពន្យល់ជាភាសាខ្មែរ)។';
 
-    const notFoundInstruction = targetLang === 'en'
-      ? 'If the information cannot be found in the provided document passages, respond EXACTLY: "I cannot find this information in the provided document content."'
-      : 'ប្រសិនបើគ្មានព័ត៌មាននៅក្នុងអត្ថបទដែលបានផ្តល់ឱ្យទេ សូមឆ្លើយឱ្យចំតែមួយឃ្លានេះគត់៖ "ខ្ញុំមិនអាចរកឃើញព័ត៌មាននេះនៅក្នុងខ្លឹមសារសៀវភៅដែលបានផ្តល់ឱ្យទេ។" (ដាច់ខាតកុំប្រឌិត ឬបន្ថែមក្រៅពីខ្លឹមសារសៀវភៅឡើយ)';
-
     const isQuizQuery = /quiz|លំហាត់|កម្រងសំណួរ|តេស្ត|mcq|ពហុជ្រើសរើស|ប្រឡង/i.test(question);
+
+    const notFoundInstruction = isQuizQuery
+      ? (targetLang === 'en'
+          ? 'For quiz requests, generate comprehensive questions based on the provided text passages. Do not refuse if text passages exist.'
+          : 'សម្រាប់សំណើបង្កើត Quiz/លំហាត់៖ ត្រូវទាញយកខ្លឹមសារមេរៀនដែលមានក្នុងអត្ថបទដកស្រង់ខាងក្រោមមកបង្កើតជាលំហាត់ Quiz ដ៏ក្បោះក្បាយជូនអ្នកប្រើប្រាស់ភ្លាម។ ដាច់ខាតកុំបដិសេធថារកមិនឃើញព័ត៌មានឡើយ!')
+      : (targetLang === 'en'
+          ? 'If the information cannot be found in the provided document passages, respond EXACTLY: "I cannot find this information in the provided document content."'
+          : 'ប្រសិនបើគ្មានព័ត៌មាននៅក្នុងអត្ថបទដែលបានផ្តល់ឱ្យទេ សូមឆ្លើយឱ្យចំតែមួយឃ្លានេះគត់៖ "ខ្ញុំមិនអាចរកឃើញព័ត៌មាននេះនៅក្នុងខ្លឹមសារសៀវភៅដែលបានផ្តល់ឱ្យទេ។" (ដាច់ខាតកុំប្រឌិត ឬបន្ថែមក្រៅពីខ្លឹមសារសៀវភៅឡើយ)');
+
     const quizInstruction = isQuizQuery
-      ? `\n៦. ដោយសារសំណួរទាក់ទងនឹងការបង្កើត Quiz ឬលំហាត់៖ ត្រូវបង្កើតឱ្យបានយ៉ាងតិចចំនួន ១០ សំណួរ (យ៉ាងតិច ១០ សំណួរឡើងទៅ)។ រាល់សំណួរទាំងអស់ត្រូវមានជម្រើស ៤ គឺ ក, ខ, គ, ឃ ហើយដាច់ខាតត្រូវតែមាន "ផ្នែកចម្លើយត្រឹមត្រូវ និងការពន្យល់" នៅចុងបញ្ចប់ ដោយបញ្ជាក់ចម្លើយត្រឹមត្រូវ ការពន្យល់ និងលេខទំព័រយោង [ទំព័រ X] សម្រាប់គ្រប់ទាំង ១០ សំណួរទាំងអស់។`
+      ? `\n៦. ដោយសារសំណួរទាក់ទងនឹងការបង្កើត Quiz ឬលំហាត់៖
+- ប្រសិនបើអ្នកប្រើប្រាស់ស្នើសុំចំនួនច្រើន (ដូចជា ៥០ ឬ ១០០ សំណួរ)៖ ដោយសារទំហំកំណត់នៃការឆ្លើយតប សូមបង្កើតកម្រងលំហាត់ Quiz ពហុជ្រើសរើស (MCQ) សំខាន់ៗបំផុតឱ្យបានយ៉ាងតិច ១៥ ទៅ ២០ សំណួរគត់ (សំណួរទី ១ ដល់ទី ២០) ដោយគ្របដណ្តប់លើគ្រប់មេរៀន/ទំព័រដែលបានដកស្រង់។
+- រាល់សំណួរទាំងអស់ត្រូវមានជម្រើស ៤ គឺ ក, ខ, គ, ឃ។
+- នៅចុងបញ្ចប់ ដាច់ខាតត្រូវតែមាន "ផ្នែកចម្លើយត្រឹមត្រូវ និងការពន្យល់" ដោយបញ្ជាក់លេខសំណួរ ចម្លើយត្រឹមត្រូវ ការពន្យល់ និងលេខទំព័រយោង [ទំព័រ X] សម្រាប់គ្រប់សំណួរទាំងអស់។
+- នៅចុងបញ្ចប់នៃចម្លើយ សូមបន្ថែមចំណាំប្រាប់អ្នកប្រើប្រាស់ថា នេះជាកម្រងលំហាត់ Quiz គំរូដែលដកស្រង់ចេញពីទំព័រទាំងនេះ ហើយអ្នកប្រើប្រាស់អាចស្នើសុំឱ្យ AI បង្កើតបន្តទៀតតាមជំពូកនីមួយៗបាន (ឧទាហរណ៍៖ "សូមបង្កើត ២០ សំណួរទៀតពីទំព័រ ២០ ដល់ ៤០")។`
       : '';
 
     return `

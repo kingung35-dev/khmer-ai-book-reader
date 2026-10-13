@@ -149,7 +149,47 @@ async function runTests() {
     });
     assert(prompt.includes('ផ្នែកចម្លើយត្រឹមត្រូវ និងការពន្យល់'), 'Grounded prompt for quiz must mandate Answer Key section');
     assert(prompt.includes('ក, ខ, គ, ឃ'), 'Grounded prompt must require choices');
-    assert(prompt.includes('១០ សំណួរ'), 'Grounded prompt must require at least 10 questions');
+    assert(prompt.includes('១៥ ទៅ ២០ សំណួរ'), 'Grounded prompt must require rich question count');
+  });
+
+  // 8. Page Range & Whole Book Detection Tests
+  test('Retrieval Service - extracts page ranges accurately in Khmer and English numerals', () => {
+    const range1 = retrievalService.extractMentionedRange('សូមបង្កើតលំហាត់ Quiz ឱ្យបាន ១០០ ចេញពីសៀវភៅនេះទាំងមូល ព្រមទាំងមានចម្លើយ ចាប់ពីទំព័រទី12 រហូតដល់ទំព័រទី184។');
+    assert.deepStrictEqual(range1, { startPage: 12, endPage: 184 });
+
+    const range2 = retrievalService.extractMentionedRange('ពីទំព័រទី ១០ ដល់ ២៥');
+    assert.deepStrictEqual(range2, { startPage: 10, endPage: 25 });
+
+    const range3 = retrievalService.extractMentionedRange('from page 5 to 30');
+    assert.deepStrictEqual(range3, { startPage: 5, endPage: 30 });
+
+    const singlePage = retrievalService.extractMentionedRange('តើទំព័រទី 12 និយាយពីអ្វី?');
+    assert.strictEqual(singlePage, null);
+  });
+
+  test('Retrieval Service - detects whole-book queries', () => {
+    assert.strictEqual(retrievalService.isWholeBookQuery('សូមបង្កើត Quiz ចេញពីសៀវភៅនេះទាំងមូល'), true);
+    assert.strictEqual(retrievalService.isWholeBookQuery('សង្ខេបទូទាំងសៀវភៅ'), true);
+    assert.strictEqual(retrievalService.isWholeBookQuery('summarize whole book'), true);
+    assert.strictEqual(retrievalService.isWholeBookQuery('តើទំព័រទី ៥ និយាយពីអ្វី?'), false);
+  });
+
+  test('Retrieval Service - retrieves chunks across page range for multi-page queries', () => {
+    const sampleChunks = [
+      { chunkId: 'c1', pageNumber: 5, text: 'អត្ថបទទំព័រ៥ ខ្លឹមសារមេរៀន' },
+      { chunkId: 'c2', pageNumber: 12, text: 'មេរៀនទី១ ចិត្តវិទ្យាជាវិទ្យាសាស្ត្រសិក្សាពីបាតុភូតចិត្ត' },
+      { chunkId: 'c3', pageNumber: 15, text: 'បាតុភូតចិត្តរបស់មនុស្សសម្តែងចេញមកខាងក្រៅតាមរយៈទឹកមុខ' },
+      { chunkId: 'c4', pageNumber: 20, text: 'សរសៃប្រសាទ និងការទទួលរំញោចឥន្ទ្រីយារម្មណ៍' },
+      { chunkId: 'c5', pageNumber: 190, text: 'ឯកសារយោងទំព័រចុងក្រោយ' }
+    ];
+
+    const results = retrievalService.retrieveRelevantChunks(sampleChunks, 'សូមបង្កើត Quiz ចាប់ពីទំព័រទី 12 ដល់ 20', null, 5);
+    const resultPages = results.map(c => c.pageNumber);
+    assert(resultPages.includes(12), 'Should include page 12');
+    assert(resultPages.includes(15), 'Should include page 15');
+    assert(resultPages.includes(20), 'Should include page 20');
+    assert(!resultPages.includes(5), 'Should not include page 5 (outside range)');
+    assert(!resultPages.includes(190), 'Should not include page 190 (outside range)');
   });
 
   console.log(`\n========================================`);

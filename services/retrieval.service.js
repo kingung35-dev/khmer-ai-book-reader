@@ -46,10 +46,59 @@ class RetrievalService {
   }
 
   /**
+   * Check if a chunk text contains readable Khmer or English rather than corrupted font glyphs
+   */
+  isCleanText(text) {
+    if (!text || text.trim().length < 20) return false;
+    const hasKhmer = /[\u1780-\u17FF]/.test(text);
+    const isCleanEnglish = /^[a-zA-Z0-9\s.,!?'"()\-:;—\n\r]+$/.test(text);
+    const hasCorrupt = /[\u0250-\u02AF\u1D00-\u1DBF\u0180-\u024F]/.test(text);
+    if (hasCorrupt && !hasKhmer) return false;
+    return hasKhmer || isCleanEnglish;
+  }
+
+  /**
+   * Extract page range mentioned in query (e.g. "ចាប់ពីទំព័រទី 12 ដល់ 184", "ពីទំព័រ ១២ រហូតដល់ទំព័រទី ១៨៤")
+   */
+  extractMentionedRange(query) {
+    if (!query) return null;
+    const khmerToArabic = {
+      '០': '0', '១': '1', '២': '2', '៣': '3', '៤': '4',
+      '៥': '5', '៦': '6', '៧': '7', '៨': '8', '៩': '9'
+    };
+    const normalized = query.replace(/[\u17E0-\u17E9]/g, d => khmerToArabic[d] || d);
+    const rangeRegex = /(?:ចាប់ពី|ពី)?\s*(?:ទំព័រ\s*ទី|ទំព័រ|pages?|p\.)\s*(\d+)\s*(?:រហូតដល់|ដល់|ទៅ|to|-)\s*(?:ទំព័រ\s*ទី|ទំព័រ|page|p\.)?\s*(\d+)/i;
+    const match = normalized.match(rangeRegex);
+    if (match) {
+      const p1 = parseInt(match[1], 10);
+      const p2 = parseInt(match[2], 10);
+      if (!isNaN(p1) && !isNaN(p2)) {
+        return {
+          startPage: Math.min(p1, p2),
+          endPage: Math.max(p1, p2)
+        };
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Detect if query asks across the entire book
+   */
+  isWholeBookQuery(query) {
+    if (!query) return false;
+    return /(?:សៀវភៅនេះទាំងមូល|សៀវភៅទាំងមូល|ទូទាំងសៀវភៅ|គ្រប់ទំព័រ|គ្រប់ជំពូក|ទាំងមូល|whole\s+book|entire\s+book|all\s+pages|all\s+chapters)/i.test(query);
+  }
+
+  /**
    * Extract page number mentioned in query (supporting Arabic & Khmer numerals, with or without "ទី")
    */
   extractMentionedPage(query) {
     if (!query) return null;
+    // If a range or whole book was requested, do not isolate to a single page
+    if (this.extractMentionedRange(query) || this.isWholeBookQuery(query)) {
+      return null;
+    }
     const khmerToArabic = {
       '០': '0', '១': '1', '២': '2', '៣': '3', '៤': '4',
       '៥': '5', '៦': '6', '៧': '7', '៨': '8', '៩': '9'
@@ -67,10 +116,55 @@ class RetrievalService {
    * @param {number} maxChunks - Maximum number of chunks to return
    * @returns {Array} Ranked relevant chunks with scores
    */
-  retrieveRelevantChunks(chunks, query, targetPage = null, maxChunks = 6) {
+  retrieveRelevantChunks(chunks, query, targetPage = null, maxChunks = 15) {
     if (!chunks || chunks.length === 0) return [];
 
-    // Extract page number mentioned in query text (e.g., "ទំព័រទី 12", "ទំព័រ ៥")
+    // 1. Check if user specified a page range (e.g. from page 12 to 184)
+    const pageRange = this.extractMentionedRange(query);
+    if (pageRange) {
+      const { startPage, endPage } = pageRange;
+      const inRange = chunks.filter(c => c.pageNumber >= startPage && c.pageNumber <= endPage);
+      const cleanInRange = inRange.filter(c => this.isCleanText(c.text));
+      const pool = cleanInRange.length > 0 ? cleanInRange : inRange;
+
+      if (pool.length <= maxChunks) {
+        return pool.sort((a, b) => a.pageNumber - b.pageNumber);
+      }
+
+      // Sample evenly across the page range
+      const sampled = [];
+      const step = pool.length / maxChunks;
+      for (let i = 0; i < maxChunks; i++) {
+        const idx = Math.min(Math.floor(i * step), pool.length - 1);
+        if (!sampled.includes(pool[idx])) {
+          sampled.push(pool[idx]);
+        }
+      }
+      return sampled.sort((a, b) => a.pageNumber - b.pageNumber);
+    }
+
+    // 2. Check if user requested the entire book
+    const isWholeBook = this.isWholeBookQuery(query);
+    if (isWholeBook && (targetPage === null || targetPage === undefined)) {
+      const cleanAll = chunks.filter(c => this.isCleanText(c.text));
+      const pool = cleanAll.length > 0 ? cleanAll : chunks;
+
+      if (pool.length <= maxChunks) {
+        return pool.sort((a, b) => a.pageNumber - b.pageNumber);
+      }
+
+      const sampled = [];
+      const step = pool.length / maxChunks;
+      for (let i = 0; i < maxChunks; i++) {
+        const idx = Math.min(Math.floor(i * step), pool.length - 1);
+        if (!sampled.includes(pool[idx])) {
+          sampled.push(pool[idx]);
+        }
+      }
+      return sampled.sort((a, b) => a.pageNumber - b.pageNumber);
+    }
+
+    // 3. Extract single page number mentioned in query text (e.g., "ទំព័រទី 12", "ទំព័រ ៥")
     const explicitlyMentionedPage = this.extractMentionedPage(query);
     const targetPageNum = targetPage !== null && targetPage !== undefined ? parseInt(targetPage, 10) : explicitlyMentionedPage;
 
@@ -84,8 +178,9 @@ class RetrievalService {
 
     const queryTokens = this.tokenize(query);
     if (queryTokens.length === 0) {
-      // Default fallback: return first few chunks
-      return chunks.slice(0, maxChunks);
+      // Default fallback: return first clean chunks
+      const cleanChunks = chunks.filter(c => this.isCleanText(c.text));
+      return (cleanChunks.length > 0 ? cleanChunks : chunks).slice(0, maxChunks);
     }
 
     // Build Document Frequency (DF) across chunks
@@ -133,6 +228,11 @@ class RetrievalService {
         score += 25.0;
       }
 
+      // Prioritize readable Khmer text over un-OCR'd corrupted glyphs
+      if (this.isCleanText(chunk.text)) {
+        score += 5.0;
+      }
+
       if (score > 0) {
         scoredChunks.push({
           ...chunk,
@@ -144,11 +244,12 @@ class RetrievalService {
     // Sort descending by score
     scoredChunks.sort((a, b) => b.score - a.score);
 
-    // If no chunks scored, return the first few chunks
-    let selected = scoredChunks.length > 0 ? scoredChunks.slice(0, maxChunks) : chunks.slice(0, maxChunks);
+    // If no chunks scored, return the first clean chunks
+    let selected = scoredChunks.length > 0 ? scoredChunks.slice(0, maxChunks) : chunks.filter(c => this.isCleanText(c.text)).slice(0, maxChunks);
+    if (selected.length === 0) selected = chunks.slice(0, maxChunks);
 
     // Enforce character limit to fit AI prompt window
-    const maxChars = aiConfig.maxContextChars || 12000;
+    const maxChars = aiConfig.maxContextChars || 36000;
     let accumulatedChars = 0;
     const finalChunks = [];
 

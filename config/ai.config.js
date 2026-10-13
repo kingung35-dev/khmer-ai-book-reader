@@ -9,11 +9,11 @@ class AIConfig {
   constructor() {
     this.provider = process.env.AI_PROVIDER || 'gemini';
     this.apiKey = process.env.GEMINI_API_KEY || '';
-    this.model = process.env.AI_MODEL || 'gemini-3.5-flash';
+    this.model = process.env.AI_MODEL || 'gemini-flash-lite-latest';
     this.temperature = parseFloat(process.env.AI_TEMPERATURE || '0.2');
     this.maxTokens = parseInt(process.env.AI_MAX_TOKENS || '8192', 10);
     this.timeoutMs = parseInt(process.env.AI_TIMEOUT_MS || '60000', 10);
-    this.maxContextChars = parseInt(process.env.AI_MAX_CONTEXT_CHARS || '12000', 10);
+    this.maxContextChars = parseInt(process.env.AI_MAX_CONTEXT_CHARS || '36000', 10);
     this.defaultLanguage = process.env.AI_DEFAULT_LANGUAGE || 'km'; // 'km' (Khmer), 'en' (English), 'auto'
     this.storagePath = require('path').join(__dirname, '..', 'storage', 'settings.json');
     this.loadPersistedConfig();

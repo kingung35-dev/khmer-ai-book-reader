@@ -64,15 +64,18 @@ class AIController {
         });
       }
 
-      // Check if user specifically requested a page, or asks for current page
-      const requestedPage = retrievalService.extractMentionedPage(question) || (scope === 'page' ? currentPage : null);
+      // Check if user specifically requested a page range, whole book, or single page
+      const pageRange = retrievalService.extractMentionedRange(question);
+      const isWholeBook = retrievalService.isWholeBookQuery(question);
+      const requestedPage = (pageRange || isWholeBook) ? null : (retrievalService.extractMentionedPage(question) || (scope === 'page' ? currentPage : null));
+
       if (requestedPage) {
         const pageNum = parseInt(requestedPage, 10);
-        let existingChunk = metadata.chunks.find(c => c.pageNumber === pageNum);
+        const pageChunks = metadata.chunks.filter(c => c.pageNumber === pageNum);
         const pageObj = metadata.pages?.find(p => p.pageNumber === pageNum);
 
         // Check if page needs OCR (empty, scanned, legacy Limon, or corrupted font hacks/IPA glyphs)
-        const needsOcr = textNeedsOcr(existingChunk?.text) || pageObj?.isScanned;
+        const needsOcr = pageChunks.length === 0 || pageChunks.some(c => textNeedsOcr(c.text)) || pageObj?.isScanned;
 
         if (needsOcr) {
           const filePath = findBookFilePath(bookId);
@@ -81,18 +84,15 @@ class AIController {
               console.log(`[AIController] Performing on-demand OCR for book "${bookId}" page ${pageNum}...`);
               const ocrText = await ocrService.ocrPage(filePath, pageNum);
               if (ocrText && ocrText.trim().length > 0) {
-                if (existingChunk) {
-                  existingChunk.text = ocrText;
-                  existingChunk.charCount = ocrText.length;
-                } else {
-                  existingChunk = {
-                    chunkId: `p${pageNum}_ocr`,
-                    pageNumber: pageNum,
-                    text: ocrText,
-                    charCount: ocrText.length
-                  };
-                  metadata.chunks.push(existingChunk);
-                }
+                // Remove old corrupted chunks for this page
+                metadata.chunks = metadata.chunks.filter(c => c.pageNumber !== pageNum);
+                metadata.chunks.push({
+                  chunkId: `p${pageNum}_ocr`,
+                  pageNumber: pageNum,
+                  text: ocrText,
+                  charCount: ocrText.length
+                });
+
                 if (pageObj) {
                   pageObj.snippet = ocrText.substring(0, 150);
                   pageObj.charCount = ocrText.length;
