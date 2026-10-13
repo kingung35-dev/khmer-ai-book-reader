@@ -1,15 +1,16 @@
 // Service Worker for Khmer AI Book Reader PWA
-const CACHE_NAME = 'khmer-ai-reader-v1';
+const CACHE_NAME = 'khmer-ai-reader-v2.2';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/manifest.json',
   '/css/styles.css',
   '/js/app.js',
+  '/js/settings.js',
+  '/js/library.js',
   '/js/pdf-reader.js',
+  '/js/book-audio-player.js',
   '/js/ai-assistant.js',
-  '/js/ocr.js',
-  '/js/tts.js',
   '/icons/app-icon.svg',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
