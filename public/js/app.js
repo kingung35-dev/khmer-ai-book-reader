@@ -4,19 +4,15 @@
  * keyboard shortcuts, and toast notifications.
  */
 
+const CURRENT_APP_VERSION = '2.3.1';
+
 document.addEventListener('DOMContentLoaded', () => {
   initTheme();
   initSidebars();
   initTabs();
   initKeyboardShortcuts();
   initMobileSupport();
-
-  // Register PWA Service Worker
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/sw.js').catch((err) => {
-      console.log('SW registration optional:', err);
-    });
-  }
+  initUpdateManager();
 
   // Load initial settings and library books
   if (window.settingsManager) {
@@ -289,3 +285,127 @@ function initKeyboardShortcuts() {
     }
   });
 }
+
+// --------------------------------------------------------------------------
+// Update & Version Management System
+// --------------------------------------------------------------------------
+function initUpdateManager() {
+  const headerBadge = document.getElementById('header-version-badge');
+  const settingsVersion = document.getElementById('settings-current-version');
+  const bannerVersionTag = document.getElementById('banner-version-tag');
+  const bannerDesc = document.getElementById('banner-version-desc');
+  const updateBanner = document.getElementById('app-update-banner');
+  const btnApplyUpdate = document.getElementById('btn-apply-update');
+  const btnDismissUpdate = document.getElementById('btn-dismiss-update');
+  const btnManualUpdate = document.getElementById('btn-manual-update');
+  const settingsVersionStatus = document.getElementById('settings-version-status');
+
+  // Display version number in header and settings
+  if (headerBadge) headerBadge.textContent = 'v' + CURRENT_APP_VERSION;
+  if (settingsVersion) settingsVersion.textContent = 'v' + CURRENT_APP_VERSION;
+
+  async function checkVersion() {
+    try {
+      const res = await fetch(`/api/version?_t=${Date.now()}`, { 
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache' }
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!data || !data.version) return;
+
+      if (data.version !== CURRENT_APP_VERSION) {
+        console.log(`[UpdateManager] New version available: v${data.version} (current: v${CURRENT_APP_VERSION})`);
+        if (bannerVersionTag) bannerVersionTag.textContent = 'v' + data.version;
+        if (bannerDesc && data.changelog) bannerDesc.textContent = data.changelog;
+        if (updateBanner) updateBanner.style.display = 'flex';
+        if (settingsVersionStatus) {
+          settingsVersionStatus.innerHTML = `<span style="color: #ef4444; font-weight: 700;">⚠️ មានកំណែថ្មី v${data.version}!</span>`;
+        }
+      } else {
+        if (settingsVersionStatus) {
+          settingsVersionStatus.innerHTML = '<span class="status-up-to-date">● ចុងក្រោយបង្អស់</span>';
+        }
+      }
+    } catch (err) {
+      console.warn('[UpdateManager] Check version skipped:', err);
+    }
+  }
+
+  // Perform a clean cache-busting update
+  async function performForceUpdate() {
+    window.showToast?.('កំពុងលុប Cache និងផ្ទុកកំណែថ្មី...', 'info');
+
+    // 1. Tell active Service Worker to clear caches
+    if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+      navigator.serviceWorker.controller.postMessage('CLEAR_CACHE');
+      navigator.serviceWorker.controller.postMessage('SKIP_WAITING');
+    }
+
+    // 2. Clear client CacheStorage directly
+    if ('caches' in window) {
+      try {
+        const cacheKeys = await caches.keys();
+        await Promise.all(cacheKeys.map(k => caches.delete(k)));
+        console.log('[UpdateManager] All caches cleared.');
+      } catch (err) {
+        console.warn('Cache clear error:', err);
+      }
+    }
+
+    // 3. Unregister all Service Worker registrations to avoid serving old cached scripts
+    if ('serviceWorker' in navigator) {
+      try {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        for (const reg of registrations) {
+          await reg.unregister();
+        }
+        console.log('[UpdateManager] Service workers unregistered.');
+      } catch (err) {
+        console.warn('SW unregister error:', err);
+      }
+    }
+
+    // 4. Force hard reload with timestamp query string
+    setTimeout(() => {
+      const targetUrl = window.location.origin + window.location.pathname + '?forceUpdate=' + Date.now();
+      window.location.href = targetUrl;
+    }, 350);
+  }
+
+  btnApplyUpdate?.addEventListener('click', performForceUpdate);
+  btnManualUpdate?.addEventListener('click', performForceUpdate);
+  btnDismissUpdate?.addEventListener('click', () => {
+    if (updateBanner) updateBanner.style.display = 'none';
+  });
+
+  // Register Service Worker with update detection
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').then((registration) => {
+      registration.addEventListener('updatefound', () => {
+        const newWorker = registration.installing;
+        newWorker?.addEventListener('statechange', () => {
+          if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+            checkVersion();
+          }
+        });
+      });
+    }).catch((err) => {
+      console.log('SW registration optional:', err);
+    });
+  }
+
+  // Check immediately
+  checkVersion();
+
+  // Check when tab or phone screen wakes up
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      checkVersion();
+    }
+  });
+
+  // Periodic check every 60 seconds
+  setInterval(checkVersion, 60000);
+}
+

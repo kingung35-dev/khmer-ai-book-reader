@@ -47,6 +47,16 @@ app.use(cors());
 app.use(express.json({ limit: '15mb' }));
 app.use(express.urlencoded({ extended: true, limit: '15mb' }));
 
+// No-cache middleware for HTML and version endpoints to prevent stale mobile/browser caching
+app.use((req, res, next) => {
+  if (req.path === '/' || req.path.endsWith('.html') || req.path.includes('version')) {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+  }
+  next();
+});
+
 // Static Assets (no-cache in dev so script updates load immediately)
 app.use(express.static(path.join(__dirname, 'public'), { etag: true, maxAge: 0 }));
 
@@ -55,6 +65,24 @@ app.use('/api/books', bookRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/tts', ttsRoutes);
+
+// Version Endpoint
+app.get('/api/version', (req, res) => {
+  const vPath = path.join(__dirname, 'public', 'version.json');
+  if (fs.existsSync(vPath)) {
+    try {
+      const data = JSON.parse(fs.readFileSync(vPath, 'utf8'));
+      return res.json({ success: true, ...data });
+    } catch (e) {}
+  }
+  const pkg = require('./package.json');
+  res.json({
+    success: true,
+    version: pkg.version || '2.3.0',
+    title: 'Khmer AI Book Reader v2.3.0',
+    updatedAt: new Date().toISOString()
+  });
+});
 
 // Mobile & Local Network Information Endpoint
 app.get('/api/network-info', (req, res) => {
@@ -70,10 +98,11 @@ app.get('/api/network-info', (req, res) => {
 
 // Health Check
 app.get('/api/health', (req, res) => {
+  const pkg = require('./package.json');
   res.json({
     status: 'ok',
     app: 'Khmer AI Book Reader',
-    version: '1.0.0',
+    version: pkg.version || '2.3.0',
     timestamp: new Date().toISOString()
   });
 });
