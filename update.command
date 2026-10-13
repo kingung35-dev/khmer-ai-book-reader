@@ -41,12 +41,32 @@ git add .
 git commit -m "Update v$NEW_VERSION: $msg" || echo "គ្មានការកែប្រែថ្មីទេ"
 git push origin main
 
+# ពិនិត្យ និងបញ្ជា Render.com Deploy Hook (ប្រសិនបើមានកំណត់)
+RENDER_HOOK=""
+if [ -f .env ]; then
+  RENDER_HOOK=$(grep -E '^RENDER_DEPLOY_HOOK=' .env | cut -d '=' -f2- | tr -d '"' | tr -d "'" | tr -d '\r')
+fi
+
+if [ -n "$RENDER_HOOK" ]; then
+  echo ""
+  echo "📡 កំពុងផ្ញើសញ្ញា Deploy ទៅកាន់ Render.com..."
+  curl -s -X POST "$RENDER_HOOK" > /dev/null 2>&1
+  echo "✅ បានបញ្ជា Render.com ឱ្យចាប់ផ្តើម Build & Deploy កំណែថ្មីដោយស្វ័យប្រវត្តិ!"
+fi
+
 echo ""
 echo "=========================================================="
 echo "  ✅ UPDATE & DEPLOY ជោគជ័យ ១០០%!"
 echo "=========================================================="
 echo "  📌 កំណែផ្លូវការថ្មី៖ v$NEW_VERSION"
-echo "  🌐 Cloud (Render.com)៖ កំពុង Auto-Deploy រយៈពេលប្រហែល ១ នាទី"
+if [ -n "$RENDER_HOOK" ]; then
+  echo "  🌐 Cloud (Render.com)៖ កំពុង Deploy ស្វ័យប្រវត្តិ (~១-២ នាទី)"
+else
+  echo "  🌐 Cloud (Render.com)៖"
+  echo "     - ប្រសិនបើ Render មិនទាន់ Auto-Deploy សូមចូល dashboard.render.com"
+  echo "       ចុចលើ khmer-ai-book-reader -> ចុចប៊ូតុង «Manual Deploy» -> «Deploy latest commit»"
+  echo "     - ឬចម្លង Link ពី Settings -> Deploy Hook មកដាក់ក្នុង .env នោះវានឹងរត់ស្វ័យប្រវត្តិ ១០០%"
+fi
 echo "  📱 លើទូរស័ព្ទដៃ៖"
 echo "     1. បើក Browser ឬ Web App ឡើងវិញ"
 echo "     2. អ្នកនឹងឃើញផ្ទាំងលោត៖ '🎉 មានកំណែថ្មី v$NEW_VERSION [Update ឥឡូវនេះ]'"
