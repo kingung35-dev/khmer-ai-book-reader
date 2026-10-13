@@ -33,9 +33,21 @@ const now = new Date();
 const pad = (n) => String(n).padStart(2, '0');
 const build = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}`;
 
-// 2. Update package.json
+// 2. Update package.json & package-lock.json
 pkg.version = newVersion;
 fs.writeFileSync(PKG_PATH, JSON.stringify(pkg, null, 2) + '\n', 'utf8');
+
+const PKG_LOCK_PATH = path.join(ROOT_DIR, 'package-lock.json');
+if (fs.existsSync(PKG_LOCK_PATH)) {
+  try {
+    const lock = JSON.parse(fs.readFileSync(PKG_LOCK_PATH, 'utf8'));
+    lock.version = newVersion;
+    if (lock.packages && lock.packages['']) {
+      lock.packages[''].version = newVersion;
+    }
+    fs.writeFileSync(PKG_LOCK_PATH, JSON.stringify(lock, null, 2) + '\n', 'utf8');
+  } catch (e) {}
+}
 
 // 3. Update public/version.json
 const changelogText = rawMsg.trim() 
