@@ -72,10 +72,7 @@ class PdfService {
 
         const normalized = this.normalizeKhmerText(pageText);
         const pageNum = pageData.pageIndex + 1;
-        const hasKhmer = /[\u1780-\u17FF]/.test(normalized);
-        const isCleanEnglish = /^[a-zA-Z0-9\s.,!?'"()\-:;—\n\r]+$/.test(normalized);
-        const hasCorruptedGlyphs = /[\u0250-\u02AF\u1D00-\u1DBF\u0180-\u024F\u0080-\u00FF]/.test(normalized);
-        const isScannedOrCorrupt = normalized.trim().length < 30 || (!hasKhmer && !isCleanEnglish) || hasCorruptedGlyphs;
+        const isScannedOrCorrupt = normalized.trim().length < 20;
 
         pages.push({
           pageNumber: pageNum,
@@ -110,6 +107,12 @@ class PdfService {
     const totalPages = pdfData.numpages || pages.length;
     const scannedPages = pages.filter(p => p.isScanned).map(p => p.pageNumber);
 
+    // Fast mapping of page texts for instant lookup by page number
+    const pageTexts = {};
+    for (const p of pages) {
+      pageTexts[p.pageNumber] = p.text;
+    }
+
     // Generate RAG chunks with page associations
     const chunks = this.createChunks(pages);
 
@@ -134,6 +137,7 @@ class PdfService {
       isMostlyScanned: scannedPages.length > totalPages * 0.7,
       scannedPageNumbers: scannedPages,
       chunksCount: chunks.length,
+      pageTexts,
       pages: pages.map(p => ({
         pageNumber: p.pageNumber,
         charCount: p.charCount,

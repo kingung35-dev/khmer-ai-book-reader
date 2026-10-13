@@ -232,14 +232,21 @@ class BookController {
         metadata = await pdfService.processPdf(id, filePath);
       }
 
-      let pageChunks = metadata.chunks?.filter(c => c.pageNumber === targetPage) || [];
-      const pageObj = metadata.pages?.find(p => p.pageNumber === targetPage);
+      if (!metadata.pageTexts) {
+        metadata.pageTexts = {};
+      }
 
-      const combinedText = pageChunks.map(c => c.text).join('\n\n').trim();
-      const needsOcr = !combinedText || combinedText.length < 20 || pageObj?.isScanned || !/[\u1780-\u17FF]/.test(combinedText);
+      let finalText = metadata.pageTexts[targetPage] || '';
+      if (!finalText) {
+        const pageChunks = metadata.chunks?.filter(c => c.pageNumber === targetPage) || [];
+        finalText = pageChunks.map(c => c.text).join('\n\n').trim();
+      }
+
+      const pageObj = metadata.pages?.find(p => p.pageNumber === targetPage);
+      const hasContent = finalText && finalText.trim().length >= 15;
+      const needsOcr = !hasContent && (pageObj?.isScanned || !finalText);
 
       let isOcrRun = false;
-      let finalText = combinedText;
 
       if (needsOcr) {
         try {
@@ -250,7 +257,7 @@ class BookController {
               isOcrRun = true;
               finalText = ocrText.trim();
 
-              // Update cached metadata
+              // Update cached metadata and fast pageTexts map
               metadata.chunks = (metadata.chunks || []).filter(c => c.pageNumber !== targetPage);
               metadata.chunks.push({
                 chunkId: `ocr_p${targetPage}`,
@@ -262,12 +269,15 @@ class BookController {
                 pageObj.isScanned = false;
                 pageObj.charCount = finalText.length;
               }
-              pdfService.saveMetadata(id, metadata);
             }
           }
         } catch (ocrErr) {
           console.warn(`[BookController] OCR fallback failed for page ${targetPage}:`, ocrErr.message);
         }
+
+        // Cache page text result (even if blank) to avoid re-running OCR repeatedly
+        metadata.pageTexts[targetPage] = finalText;
+        pdfService.saveMetadata(id, metadata);
       }
 
       // Normalize Khmer text (repair coengs, remove zero-width spaces, normalize whitespace)

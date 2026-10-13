@@ -164,35 +164,66 @@ class BookAudioPlayer {
     this.stopAudio();
     this.isLoading = true;
 
+    if (!this.pageTextCache) {
+      this.pageTextCache = {};
+    }
+
     let pageText = '';
     let isOcr = false;
 
-    try {
-      // 1. Fetch clean text from server endpoint (includes automatic OCR if needed)
-      const res = await fetch(`/api/books/${encodeURIComponent(bookId)}/page/${this.currentPage}/text`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && data.text && data.text.trim().length > 0) {
-          pageText = data.text;
-          isOcr = data.isOcr;
-          if (data.title) this.currentBookTitle = data.title;
-          if (data.totalPages) this.totalPages = data.totalPages;
-        }
-      }
-    } catch (e) {
-      console.warn('[BookAudioPlayer] Server page text fetch failed, using fallback:', e.message);
+    // 1. Check local in-memory cache first (instant 0ms)
+    const cacheKey = `${bookId}_p${this.currentPage}`;
+    if (this.pageTextCache[cacheKey]) {
+      pageText = this.pageTextCache[cacheKey];
     }
 
-    // 2. Client-side PDF.js fallback if server text empty
-    if (!pageText || pageText.trim().length < 5) {
+    // 2. Fast Client-side PDF.js extraction (takes ~5-15ms, skips slow server OCR)
+    if (!pageText && window.pdfReader?.pdfDoc) {
       try {
-        const page = await window.pdfReader?.pdfDoc?.getPage(this.currentPage);
+        const page = await window.pdfReader.pdfDoc.getPage(this.currentPage);
         if (page) {
           const textContent = await page.getTextContent();
-          pageText = (textContent.items || []).map(s => s.str).join(' ').trim();
+          const items = textContent.items || [];
+          if (items.length > 0) {
+            const rawClientText = items.map(s => s.str).join(' ').trim();
+            // If page has real content, use it immediately!
+            if (rawClientText.length >= 15) {
+              pageText = rawClientText;
+              this.pageTextCache[cacheKey] = pageText;
+            }
+          }
         }
       } catch (clientErr) {
-        console.warn('[BookAudioPlayer] Client PDF.js text extraction error:', clientErr.message);
+        console.warn('[BookAudioPlayer] Fast client text extraction error:', clientErr.message);
+      }
+    }
+
+    // 3. Fallback to server endpoint with 7s timeout (only for pure scanned pages)
+    if (!pageText || pageText.trim().length < 10) {
+      if (this.statusTextEl) {
+        this.statusTextEl.textContent = `កំពុងស្រង់អក្សរពី Server (ទំព័រទី ${this.currentPage})...`;
+      }
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 7000);
+
+        const res = await fetch(`/api/books/${encodeURIComponent(bookId)}/page/${this.currentPage}/text`, {
+          signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && data.text && data.text.trim().length > 0) {
+            pageText = data.text;
+            isOcr = data.isOcr;
+            this.pageTextCache[cacheKey] = pageText;
+            if (data.title) this.currentBookTitle = data.title;
+            if (data.totalPages) this.totalPages = data.totalPages;
+          }
+        }
+      } catch (e) {
+        console.warn('[BookAudioPlayer] Server page text fetch fallback:', e.message);
       }
     }
 
@@ -205,20 +236,23 @@ class BookAudioPlayer {
       }
       if (this.statusTextEl) this.statusTextEl.textContent = 'គ្មានអត្ថបទ';
 
-      // If auto-advance is enabled and not at the last page, skip to next page after 1.5s
+      // If auto-advance is enabled and not at the last page, skip to next page after 1.2s
       if (this.autoAdvance && this.currentPage < this.totalPages) {
         window.showToast(`ទំព័រទី ${this.currentPage} គ្មានអក្សរទេ កំពុងរំលងទៅទំព័រទី ${this.currentPage + 1}...`, 'info');
         setTimeout(() => {
           if (this.isPlaying || this.container.style.display !== 'none') {
             this.nextPage();
           }
-        }, 1500);
+        }, 1200);
       } else {
         window.showToast(`ទំព័រទី ${this.currentPage} គ្មានអក្សរស្រង់ស្រាប់ទេ`, 'info');
         this.resetPlayButton();
       }
       return;
     }
+
+    // Prefetch next page text in background so next page starts instantly!
+    this.prefetchNextPage(bookId, this.currentPage + 1);
 
     // Split page text into sentences
     this.sentences = this.splitKhmerSentences(pageText);
@@ -279,6 +313,13 @@ class BookAudioPlayer {
     const url = `/api/tts?tl=km&q=${encodeURIComponent(sentence)}`;
     this.audio = new Audio(url);
     this.audio.playbackRate = this.speed;
+
+    // Pre-cache next sentence audio in background for seamless flow
+    if (this.sentenceIndex + 1 < this.sentences.length) {
+      const nextSentence = this.sentences[this.sentenceIndex + 1];
+      const nextAudio = new Audio(`/api/tts?tl=km&q=${encodeURIComponent(nextSentence)}`);
+      nextAudio.preload = 'auto';
+    }
 
     this.audio.onended = () => {
       this.handleSentenceEnded();
@@ -486,6 +527,31 @@ class BookAudioPlayer {
     this.sentences = this.splitKhmerSentences(text);
     if (this.sentences.length > 0) {
       this.playSentence(0);
+    }
+  }
+
+  async prefetchNextPage(bookId, nextPageNum) {
+    if (nextPageNum > this.totalPages) return;
+    const cacheKey = `${bookId}_p${nextPageNum}`;
+    if (this.pageTextCache && this.pageTextCache[cacheKey]) return;
+
+    try {
+      if (window.pdfReader?.pdfDoc) {
+        const page = await window.pdfReader.pdfDoc.getPage(nextPageNum);
+        if (page) {
+          const textContent = await page.getTextContent();
+          const items = textContent.items || [];
+          if (items.length > 0) {
+            const rawText = items.map(s => s.str).join(' ').trim();
+            if (rawText.length >= 15) {
+              if (!this.pageTextCache) this.pageTextCache = {};
+              this.pageTextCache[cacheKey] = rawText;
+            }
+          }
+        }
+      }
+    } catch (e) {
+      // background prefetch failure is non-fatal
     }
   }
 

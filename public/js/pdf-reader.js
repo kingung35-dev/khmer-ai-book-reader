@@ -210,6 +210,14 @@ class PdfReader {
         }
       }
     }, { passive: true });
+
+    // Generate thumbnails only on-demand when user clicks the thumbnails tab
+    document.getElementById('tab-btn-thumbnails')?.addEventListener('click', () => {
+      if (this.pdfDoc && (!this.thumbnailsContainer.children.length || this.thumbnailsContainer.dataset.bookId !== this.currentBook?.id)) {
+        this.thumbnailsContainer.dataset.bookId = this.currentBook?.id || '';
+        this.generateThumbnails();
+      }
+    });
   }
 
   async loadBook(book) {
@@ -248,11 +256,8 @@ class PdfReader {
         window.aiAssistant.setActiveBook(book, this.currentPage);
       }
 
-      // 3. Render reader
+      // 3. Render reader instantly
       await this.renderCurrentView();
-
-      // 4. Generate thumbnails in background
-      this.generateThumbnails();
 
     } catch (err) {
       console.error('Failed to load PDF document:', err);
@@ -274,22 +279,74 @@ class PdfReader {
   async renderCurrentView() {
     if (!this.pdfDoc) return;
 
+    if (this.pageObserver) {
+      this.pageObserver.disconnect();
+    }
+    this.renderedPages = new Set();
     this.viewport.innerHTML = '';
 
     if (this.isContinuous) {
-      // Render all pages in continuous vertical stack
+      // 1. Sample first page to determine realistic dimensions for placeholders
+      const samplePage = await this.pdfDoc.getPage(1);
+      const unscaled = samplePage.getViewport({ scale: 1.0 });
+
+      let scale = this.scale;
+      if (this.zoomMode === 'page-width') {
+        const containerWidth = Math.max(280, (this.viewport.clientWidth || window.innerWidth) - 48);
+        scale = containerWidth / unscaled.width;
+        this.scale = scale;
+      } else if (this.zoomMode === 'page-fit') {
+        const containerHeight = Math.max(300, (this.viewport.clientHeight || window.innerHeight) - 48);
+        scale = containerHeight / unscaled.height;
+        this.scale = scale;
+      }
+
+      const sampleViewport = samplePage.getViewport({ scale });
+      const estWidth = Math.floor(sampleViewport.width);
+      const estHeight = Math.floor(sampleViewport.height);
+
+      // 2. Fast creation of placeholder containers for all pages (instant DOM insertion)
+      const fragment = document.createDocumentFragment();
       for (let i = 1; i <= this.totalPages; i++) {
         const pageContainer = document.createElement('div');
         pageContainer.className = 'pdf-page-container';
         pageContainer.id = `page-container-${i}`;
         pageContainer.dataset.page = i;
-        this.viewport.appendChild(pageContainer);
-
-        await this.renderPageToContainer(i, pageContainer);
+        pageContainer.style.width = `${estWidth}px`;
+        pageContainer.style.minHeight = `${estHeight}px`;
+        pageContainer.innerHTML = `<div class="page-loading-skeleton" style="width:100%;height:${estHeight}px;display:flex;align-items:center;justify-content:center;color:var(--text-tertiary);font-size:0.85rem;background:var(--bg-secondary);border-radius:4px;">ទំព័រ ${i}...</div>`;
+        fragment.appendChild(pageContainer);
       }
+      this.viewport.appendChild(fragment);
+
+      // 3. Immediately render the target page and its immediate neighbors for instant display
+      const currentContainer = document.getElementById(`page-container-${this.currentPage}`);
+      if (currentContainer) {
+        this.renderedPages.add(this.currentPage);
+        await this.renderPageToContainer(this.currentPage, currentContainer);
+      }
+
+      if (this.currentPage > 1) {
+        const prevContainer = document.getElementById(`page-container-${this.currentPage - 1}`);
+        if (prevContainer) {
+          this.renderedPages.add(this.currentPage - 1);
+          this.renderPageToContainer(this.currentPage - 1, prevContainer);
+        }
+      }
+      if (this.currentPage < this.totalPages) {
+        const nextContainer = document.getElementById(`page-container-${this.currentPage + 1}`);
+        if (nextContainer) {
+          this.renderedPages.add(this.currentPage + 1);
+          this.renderPageToContainer(this.currentPage + 1, nextContainer);
+        }
+      }
+
+      // 4. Setup IntersectionObserver to lazily render remaining pages as user scrolls
+      this.setupLazyPageObserver();
       this.scrollToPage(this.currentPage);
+
     } else {
-      // Single Page Mode
+      // Single Page Mode: only render active page
       const pageContainer = document.createElement('div');
       pageContainer.className = 'pdf-page-container';
       pageContainer.id = `page-container-${this.currentPage}`;
@@ -301,6 +358,31 @@ class PdfReader {
 
     this.checkScannedPageBanner();
     this.updateBookmarkButtonState();
+  }
+
+  setupLazyPageObserver() {
+    if (this.pageObserver) {
+      this.pageObserver.disconnect();
+    }
+
+    this.pageObserver = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const pageNum = parseInt(entry.target.dataset.page, 10);
+          if (pageNum && !this.renderedPages.has(pageNum)) {
+            this.renderedPages.add(pageNum);
+            this.renderPageToContainer(pageNum, entry.target);
+          }
+        }
+      });
+    }, {
+      root: this.viewport,
+      rootMargin: '500px 0px 500px 0px', // Pre-render 500px before appearing on screen
+      threshold: 0.01
+    });
+
+    const containers = this.viewport.querySelectorAll('.pdf-page-container');
+    containers.forEach(c => this.pageObserver.observe(c));
   }
 
   async renderPageToContainer(pageNum, container) {
@@ -567,7 +649,8 @@ class PdfReader {
     if (!this.thumbnailsContainer || !this.pdfDoc) return;
     this.thumbnailsContainer.innerHTML = '';
 
-    for (let i = 1; i <= Math.min(this.totalPages, 40); i++) {
+    const maxThumbs = Math.min(this.totalPages, 30);
+    for (let i = 1; i <= maxThumbs; i++) {
       const item = document.createElement('div');
       item.className = `thumbnail-item ${i === this.currentPage ? 'active' : ''}`;
       item.dataset.page = i;
@@ -584,8 +667,10 @@ class PdfReader {
       item.addEventListener('click', () => this.goToPage(i));
       this.thumbnailsContainer.appendChild(item);
 
-      // Render thumbnail asynchronously
-      this.renderThumbnail(i, canvas);
+      // Stagger thumbnail rendering
+      setTimeout(() => {
+        this.renderThumbnail(i, canvas);
+      }, i * 35);
     }
   }
 
