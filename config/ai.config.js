@@ -70,10 +70,11 @@ class AIConfig {
       hasApiKey: Boolean(this.apiKey && this.apiKey.trim().length > 5 && this.apiKey !== 'your_api_key_here' && this.apiKey !== 'your_google_gemini_api_key_here'),
       maskedApiKey: this.getMaskedKey(),
       availableModels: [
-        { id: 'gemini-3.5-flash', name: 'Gemini 3.5 Flash (ស្ថិរភាព & ឆ្លើយតបរហ័ស - ណែនាំ)', recommended: true },
-        { id: 'gemini-3.5-flash-lite', name: 'Gemini 3.5 Flash-Lite (ល្បឿនលឿន)' },
+        { id: 'gemini-flash-lite-latest', name: 'Gemini Flash-Lite (ល្បឿនលឿន & ស្ថិរភាពខ្ពស់ - ណែនាំ)', recommended: true },
+        { id: 'gemini-3.7-flash', name: 'Gemini 3.7 Flash (ឆ្លាតវៃ & គុណភាពខ្ពស់)' },
+        { id: 'gemini-flash-latest', name: 'Gemini Flash Latest' },
         { id: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash (ជំនាន់ចុងក្រោយ)' },
-        { id: 'gemini-3.7-flash', name: 'Gemini 3.7 Flash' }
+        { id: 'gemini-3.5-flash', name: 'Gemini 3.5 Flash' }
       ],
       availableLanguages: [
         { id: 'km', name: 'ភាសាខ្មែរ (Khmer)' },

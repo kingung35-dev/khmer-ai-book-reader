@@ -39,7 +39,7 @@ class AIController {
    */
   async askQuestion(req, res, next) {
     try {
-      const { bookId, question, currentPage, scope = 'book', language } = req.body;
+      const { bookId, question, currentPage, scope = 'book', language, startPage, endPage } = req.body;
 
       if (!question || question.trim().length === 0) {
         return res.status(400).json({
@@ -65,8 +65,14 @@ class AIController {
       }
 
       // Check if user specifically requested a page range, whole book, or single page
-      const pageRange = retrievalService.extractMentionedRange(question);
-      const isWholeBook = retrievalService.isWholeBookQuery(question);
+      let pageRange = retrievalService.extractMentionedRange(question);
+      if (!pageRange && startPage && endPage && (scope === 'range' || parseInt(startPage, 10) !== parseInt(endPage, 10))) {
+        pageRange = {
+          startPage: Math.min(parseInt(startPage, 10), parseInt(endPage, 10)),
+          endPage: Math.max(parseInt(startPage, 10), parseInt(endPage, 10))
+        };
+      }
+      const isWholeBook = !pageRange && (scope === 'book' || retrievalService.isWholeBookQuery(question));
       const requestedPage = (pageRange || isWholeBook) ? null : (retrievalService.extractMentionedPage(question) || (scope === 'page' ? currentPage : null));
 
       if (requestedPage) {
@@ -108,12 +114,16 @@ class AIController {
         }
       }
 
+      const effectiveScope = isWholeBook ? 'book' : (pageRange ? 'range' : (scope || 'page'));
+
       const result = await aiService.askGroundedQuestion({
         question: question.trim(),
         chunks: metadata.chunks,
-        currentPage: currentPage ? parseInt(currentPage, 10) : null,
+        currentPage: requestedPage ? parseInt(requestedPage, 10) : null,
         language: language || aiConfig.defaultLanguage,
-        scope
+        scope: effectiveScope,
+        startPage: pageRange ? pageRange.startPage : (startPage ? parseInt(startPage, 10) : null),
+        endPage: pageRange ? pageRange.endPage : (endPage ? parseInt(endPage, 10) : null)
       });
 
       res.json({
@@ -126,11 +136,11 @@ class AIController {
   }
 
   /**
-   * Execute predefined AI action on selected text or page
+   * Execute predefined AI action on selected text, specific page, or page range
    */
   async executeAction(req, res, next) {
     try {
-      const { action, text, bookId, pageNumber, language } = req.body;
+      const { action, text, bookId, pageNumber, startPage, endPage, scope, language } = req.body;
 
       if (!action) {
         return res.status(400).json({ success: false, error: 'សូមបញ្ជាក់ប្រភេទសកម្មភាព AI (Action is required)' });
@@ -138,29 +148,47 @@ class AIController {
 
       let actionText = (text || '').trim();
       let bookTitle = '';
+      let displayPage = pageNumber ? parseInt(pageNumber, 10) : null;
 
       if (bookId) {
         const metadata = pdfService.getMetadata(bookId);
         bookTitle = metadata?.title || '';
 
-        if (!actionText && pageNumber && metadata?.chunks) {
-          const pageNum = parseInt(pageNumber, 10);
-          const pageChunks = metadata.chunks.filter(c => c.pageNumber === pageNum);
-          if (pageChunks.length > 0) {
-            actionText = pageChunks.map(c => c.text).join('\n\n');
+        if (!actionText && metadata?.chunks) {
+          if (startPage && endPage) {
+            const p1 = parseInt(startPage, 10);
+            const p2 = parseInt(endPage, 10);
+            const s = Math.min(p1, p2);
+            const e = Math.max(p1, p2);
+            const rangeChunks = metadata.chunks.filter(c => c.pageNumber >= s && c.pageNumber <= e);
+            const cleanChunks = rangeChunks.filter(c => retrievalService.isCleanText(c.text));
+            const pool = cleanChunks.length > 0 ? cleanChunks : rangeChunks;
+            actionText = pool.slice(0, 15).map(c => `[ទំព័រទី ${c.pageNumber}]\n${c.text.trim()}`).join('\n\n');
+            displayPage = `${s}-${e}`;
+          } else if (pageNumber) {
+            const pageNum = parseInt(pageNumber, 10);
+            const pageChunks = metadata.chunks.filter(c => c.pageNumber === pageNum);
+            if (pageChunks.length > 0) {
+              actionText = pageChunks.map(c => c.text).join('\n\n');
+            }
+          } else if (scope === 'book') {
+            const cleanChunks = metadata.chunks.filter(c => retrievalService.isCleanText(c.text));
+            const pool = cleanChunks.length > 0 ? cleanChunks : metadata.chunks;
+            actionText = pool.slice(0, 15).map(c => `[ទំព័រទី ${c.pageNumber}]\n${c.text.trim()}`).join('\n\n');
+            displayPage = 'សៀវភៅទាំងមូល';
           }
         }
       }
 
       if (!actionText || actionText.length === 0) {
-        return res.status(400).json({ success: false, error: 'សូមជ្រើសរើសអត្ថបទជាមុនសិន (Please select text)' });
+        return res.status(400).json({ success: false, error: 'សូមជ្រើសរើសអត្ថបទ ឬទំព័រជាមុនសិន (Please select text or pages)' });
       }
 
       const result = await aiService.executeAction({
         action,
         text: actionText,
         bookTitle,
-        pageNumber: pageNumber ? parseInt(pageNumber, 10) : null,
+        pageNumber: displayPage,
         language: language || aiConfig.defaultLanguage
       });
 

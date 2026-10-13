@@ -14,5 +14,6 @@ router.get('/:id/pdf', (req, res, next) => bookController.servePdf(req, res, nex
 router.post('/:id/progress', (req, res, next) => bookController.updateProgress(req, res, next));
 router.delete('/:id', (req, res, next) => bookController.deleteBook(req, res, next));
 router.post('/:id/ocr', (req, res, next) => bookController.runOcr(req, res, next));
+router.get('/:id/page/:pageNum/text', (req, res, next) => bookController.getPageText(req, res, next));
 
 module.exports = router;

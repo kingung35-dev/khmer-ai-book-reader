@@ -210,6 +210,86 @@ class BookController {
   }
 
   /**
+   * Get clean text for a specific page of the original book (with automatic OCR fallback)
+   */
+  async getPageText(req, res, next) {
+    try {
+      const { id, pageNum } = req.params;
+      const targetPage = parseInt(pageNum, 10);
+
+      if (isNaN(targetPage) || targetPage < 1) {
+        return res.status(400).json({ success: false, error: 'លេខទំព័រមិនត្រឹមត្រូវ' });
+      }
+
+      const file = findBookFileById(id);
+      if (!file) {
+        return res.status(404).json({ success: false, error: 'រកមិនឃើញសៀវភៅនេះទេ' });
+      }
+
+      const filePath = path.join(BOOKS_DIR, file);
+      let metadata = pdfService.getMetadata(id);
+      if (!metadata) {
+        metadata = await pdfService.processPdf(id, filePath);
+      }
+
+      let pageChunks = metadata.chunks?.filter(c => c.pageNumber === targetPage) || [];
+      const pageObj = metadata.pages?.find(p => p.pageNumber === targetPage);
+
+      const combinedText = pageChunks.map(c => c.text).join('\n\n').trim();
+      const needsOcr = !combinedText || combinedText.length < 20 || pageObj?.isScanned || !/[\u1780-\u17FF]/.test(combinedText);
+
+      let isOcrRun = false;
+      let finalText = combinedText;
+
+      if (needsOcr) {
+        try {
+          const isAvail = await ocrService.checkAvailability();
+          if (isAvail) {
+            const ocrText = await ocrService.ocrPage(filePath, targetPage);
+            if (ocrText && ocrText.trim().length > 0) {
+              isOcrRun = true;
+              finalText = ocrText.trim();
+
+              // Update cached metadata
+              metadata.chunks = (metadata.chunks || []).filter(c => c.pageNumber !== targetPage);
+              metadata.chunks.push({
+                chunkId: `ocr_p${targetPage}`,
+                pageNumber: targetPage,
+                text: finalText,
+                charCount: finalText.length
+              });
+              if (pageObj) {
+                pageObj.isScanned = false;
+                pageObj.charCount = finalText.length;
+              }
+              pdfService.saveMetadata(id, metadata);
+            }
+          }
+        } catch (ocrErr) {
+          console.warn(`[BookController] OCR fallback failed for page ${targetPage}:`, ocrErr.message);
+        }
+      }
+
+      // Normalize Khmer text (repair coengs, remove zero-width spaces, normalize whitespace)
+      finalText = pdfService.normalizeKhmerText(finalText);
+
+      res.json({
+        success: true,
+        bookId: id,
+        title: metadata.title || '',
+        pageNumber: targetPage,
+        totalPages: metadata.totalPages || 1,
+        text: finalText,
+        charCount: finalText.length,
+        isOcr: isOcrRun,
+        isEmpty: finalText.length === 0
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
    * Update reading progress, bookmarks, and notes
    */
   async updateProgress(req, res, next) {

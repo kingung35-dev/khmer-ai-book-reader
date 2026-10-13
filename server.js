@@ -47,8 +47,8 @@ app.use(cors());
 app.use(express.json({ limit: '15mb' }));
 app.use(express.urlencoded({ extended: true, limit: '15mb' }));
 
-// Static Assets
-app.use(express.static(path.join(__dirname, 'public')));
+// Static Assets (no-cache in dev so script updates load immediately)
+app.use(express.static(path.join(__dirname, 'public'), { etag: true, maxAge: 0 }));
 
 // API Routes
 app.use('/api/books', bookRoutes);

@@ -38,12 +38,18 @@ class AIService {
    * @param {string} params.language - 'km', 'en', or 'auto'
    * @param {string} params.scope - 'book' or 'page'
    */
-  async askGroundedQuestion({ question, chunks, currentPage = null, language = null, scope = 'book' }) {
+  async askGroundedQuestion({ question, chunks, currentPage = null, language = null, scope = 'book', startPage = null, endPage = null }) {
     const targetLang = language || aiConfig.defaultLanguage || 'km';
-    const targetPage = scope === 'page' ? currentPage : null;
+    const isWholeBook = scope === 'book' || retrievalService.isWholeBookQuery(question);
+    const targetPage = (!isWholeBook && scope === 'page') ? currentPage : null;
 
     // 1. Retrieve the most relevant passages
-    const relevantChunks = retrievalService.retrieveRelevantChunks(chunks, question, targetPage);
+    const options = { scope: isWholeBook ? 'book' : scope };
+    if (startPage && endPage) {
+      options.startPage = Math.min(startPage, endPage);
+      options.endPage = Math.max(startPage, endPage);
+    }
+    const relevantChunks = retrievalService.retrieveRelevantChunks(chunks, question, targetPage, 15, options);
     const contextText = retrievalService.formatContextForPrompt(relevantChunks);
     const pageNumbers = [...new Set(relevantChunks.map(c => c.pageNumber))].sort((a, b) => a - b);
 
@@ -57,8 +63,8 @@ class AIService {
       question,
       contextText,
       targetLang,
-      scope,
-      currentPage,
+      scope: isWholeBook ? 'book' : scope,
+      currentPage: isWholeBook ? null : currentPage,
       relevantPages: pageNumbers
     });
 
@@ -218,19 +224,33 @@ class AIService {
    * Construct grounded QA prompt
    */
   buildGroundedPrompt({ question, contextText, targetLang, scope, currentPage, relevantPages }) {
-    const langInstruction = targetLang === 'en'
-      ? 'Respond strictly in English.'
-      : 'សូមឆ្លើយតបជាភាសាខ្មែរសុទ្ធសាធ ១០០% ឲ្យបានក្បោះក្បាយ ពិរោះ និងត្រឹមត្រូវតាមក្បួនវេយ្យាករណ៍ខេមរភាសា ដោយដាច់ខាតមិនប្រើប្រាស់ភាសាអង់គ្លេសឡើយ (រាល់ពាក្យបច្ចេកទេសត្រូវបកប្រែ និងពន្យល់ជាភាសាខ្មែរ)។';
-
     const isQuizQuery = /quiz|លំហាត់|កម្រងសំណួរ|តេស្ត|mcq|ពហុជ្រើសរើស|ប្រឡង/i.test(question);
+    const isTranslateQuery = /បកប្រែ|translate|translation/i.test(question);
+    const isExplainOrInterpret = /បកស្រាយ|ពន្យល់|សង្ខេប|ខ្លឹមសារសំខាន់|explain|interpret|summarize|overview/i.test(question);
+    const isOverviewQuery = /សៀវភៅនេះទាំងមូល|សៀវភៅទាំងមូល|ទូទាំងសៀវភៅ|គ្រប់ទំព័រ|គ្រប់ជំពូក|whole\s+book|entire\s+book/i.test(question);
+    const isSourceKhmer = /[\u1780-\u17FF]/.test(contextText || '');
 
-    const notFoundInstruction = isQuizQuery
-      ? (targetLang === 'en'
-          ? 'For quiz requests, generate comprehensive questions based on the provided text passages. Do not refuse if text passages exist.'
-          : 'សម្រាប់សំណើបង្កើត Quiz/លំហាត់៖ ត្រូវទាញយកខ្លឹមសារមេរៀនដែលមានក្នុងអត្ថបទដកស្រង់ខាងក្រោមមកបង្កើតជាលំហាត់ Quiz ដ៏ក្បោះក្បាយជូនអ្នកប្រើប្រាស់ភ្លាម។ ដាច់ខាតកុំបដិសេធថារកមិនឃើញព័ត៌មានឡើយ!')
-      : (targetLang === 'en'
-          ? 'If the information cannot be found in the provided document passages, respond EXACTLY: "I cannot find this information in the provided document content."'
-          : 'ប្រសិនបើគ្មានព័ត៌មាននៅក្នុងអត្ថបទដែលបានផ្តល់ឱ្យទេ សូមឆ្លើយឱ្យចំតែមួយឃ្លានេះគត់៖ "ខ្ញុំមិនអាចរកឃើញព័ត៌មាននេះនៅក្នុងខ្លឹមសារសៀវភៅដែលបានផ្តល់ឱ្យទេ។" (ដាច់ខាតកុំប្រឌិត ឬបន្ថែមក្រៅពីខ្លឹមសារសៀវភៅឡើយ)');
+    let notFoundInstruction = '';
+    if (isQuizQuery) {
+      notFoundInstruction = targetLang === 'en'
+        ? 'For quiz requests, generate comprehensive questions based on the provided text passages. Do not refuse if text passages exist.'
+        : 'សម្រាប់សំណើបង្កើត Quiz/លំហាត់៖ ត្រូវទាញយកខ្លឹមសារមេរៀនដែលមានក្នុងអត្ថបទដកស្រង់ខាងក្រោមមកបង្កើតជាលំហាត់ Quiz ដ៏ក្បោះក្បាយជូនអ្នកប្រើប្រាស់ភ្លាម។ ដាច់ខាតកុំបដិសេធថារកមិនឃើញព័ត៌មានឡើយ!';
+    } else if (isOverviewQuery || isExplainOrInterpret || isTranslateQuery) {
+      notFoundInstruction = '[FAITHFUL TRANSLATION MODE]: សម្រាប់សំណើបកស្រាយ/សង្ខេប/បកប្រែ ឬសួរពីខ្លឹមសារសៀវភៅ៖ ត្រូវទាញយក និងសំយោគខ្លឹមសារសំខាន់ៗដែលមានក្នុងអត្ថបទដកស្រង់ខាងក្រោមមកបកស្រាយ ឆ្លើយតប និងបកប្រែយ៉ាងក្បោះក្បាយ មានរបៀបរៀបរយជូនអ្នកប្រើប្រាស់ភ្លាម។ ដាច់ខាតកុំបដិសេធថារកមិនឃើញព័ត៌មានឡើយ ដរាបណាមានអត្ថបទដកស្រង់!';
+    } else {
+      notFoundInstruction = targetLang === 'en'
+        ? 'If the information cannot be found in the provided document passages, respond EXACTLY: "I cannot find this information in the provided document content."'
+        : 'ប្រសិនបើគ្មានព័ត៌មាននៅក្នុងអត្ថបទដែលបានផ្តល់ឱ្យទេ សូមឆ្លើយឱ្យចំតែមួយឃ្លានេះគត់៖ "ខ្ញុំមិនអាចរកឃើញព័ត៌មាននេះនៅក្នុងខ្លឹមសារសៀវភៅដែលបានផ្តល់ឱ្យទេ។" (ដាច់ខាតកុំប្រឌិត ឬបន្ថែមក្រៅពីខ្លឹមសារសៀវភៅឡើយ)';
+    }
+
+    let langInstruction = '';
+    if (targetLang === 'en') {
+      langInstruction = 'Respond strictly in English.';
+    } else if (isTranslateQuery) {
+      langInstruction = 'គោលការណ៍បកប្រែដាច់ខាត៖ ត្រូវបកប្រែ និងឆ្លើយតបជា «ភាសាខ្មែរ» សុទ្ធសាធ ១០០% ឱ្យបានត្រឹមត្រូវ ពិរោះ រលូន និងងាយយល់ ដើម្បីឱ្យអ្នកប្រើប្រាស់អាចអាន និងស្ដាប់ជាសំឡេងខ្មែរ (Khmer Text-to-Speech) បានយ៉ាងងាយស្រួល។ ដាច់ខាតកុំបកប្រែ ឬឆ្លើយតបជាភាសាអង់គ្លេសឡើយ (រាល់ពាក្យពេចន៍ និងការបកប្រែទាំងអស់ត្រូវតែជាភាសាខ្មែរ ១០០% លើកលែងតែពាក្យដើមបរទេសក្នុងវង់ក្រចកនៃសទ្ទានុក្រម)! រៀបចំជា ២ ផ្នែក៖ (១) ការបកប្រែជាភាសាខ្មែរ (Khmer Translation) ដោយភ្ជាប់លេខទំព័រយោង [ទំព័រ X] និង (២) សទ្ទានុក្រមពាក្យបច្ចេកទេស (Key Terminology)។';
+    } else {
+      langInstruction = 'គោលការណ៍ភាសាដាច់ខាត៖ ត្រូវឆ្លើយតប បកស្រាយ ពន្យល់ និងសង្ខេបជា «ភាសាខ្មែរ» សុទ្ធសាធ ១០០% ឲ្យបានក្បោះក្បាយ ពិរោះ រលូន មានរបៀបរៀបរយ និងត្រឹមត្រូវតាមក្បួនវេយ្យាករណ៍ខេមរភាសា ដោយដាច់ខាតមិនឆ្លើយតប ឬបកប្រែជាភាសាអង់គ្លេសឡើយ (រាល់ពាក្យបច្ចេកទេសបរទេសត្រូវបកប្រែ និងពន្យល់ជាភាសាខ្មែរ) ដោយភ្ជាប់លេខទំព័រយោង [ទំព័រ X] សម្រាប់ផ្ទៀងផ្ទាត់។';
+    }
 
     const quizInstruction = isQuizQuery
       ? `\n៦. ដោយសារសំណួរទាក់ទងនឹងការបង្កើត Quiz ឬលំហាត់៖
@@ -238,6 +258,13 @@ class AIService {
 - រាល់សំណួរទាំងអស់ត្រូវមានជម្រើស ៤ គឺ ក, ខ, គ, ឃ។
 - នៅចុងបញ្ចប់ ដាច់ខាតត្រូវតែមាន "ផ្នែកចម្លើយត្រឹមត្រូវ និងការពន្យល់" ដោយបញ្ជាក់លេខសំណួរ ចម្លើយត្រឹមត្រូវ ការពន្យល់ និងលេខទំព័រយោង [ទំព័រ X] សម្រាប់គ្រប់សំណួរទាំងអស់។
 - នៅចុងបញ្ចប់នៃចម្លើយ សូមបន្ថែមចំណាំប្រាប់អ្នកប្រើប្រាស់ថា នេះជាកម្រងលំហាត់ Quiz គំរូដែលដកស្រង់ចេញពីទំព័រទាំងនេះ ហើយអ្នកប្រើប្រាស់អាចស្នើសុំឱ្យ AI បង្កើតបន្តទៀតតាមជំពូកនីមួយៗបាន (ឧទាហរណ៍៖ "សូមបង្កើត ២០ សំណួរទៀតពីទំព័រ ២០ ដល់ ៤០")។`
+      : '';
+
+    const overviewInstruction = (isOverviewQuery || (isExplainOrInterpret && scope === 'book'))
+      ? `\n៧. ដោយសារសំណួរទាក់ទងនឹងការបកស្រាយ ឬសង្ខេបខ្លឹមសារសៀវភៅទាំងមូល៖
+- សូមធ្វើការសំយោគ និងបកស្រាយខ្លឹមសារសំខាន់ៗដែលដកស្រង់ចេញពីគ្រប់ជំពូក/ទំព័រទាំងអស់នៃសៀវភៅនេះ។
+- រៀបចំចម្លើយជាផ្នែកៗឱ្យមានរបៀបរៀបរយ (Markdown Headers, Bullet Points) រួមមាន៖ ប្រធានបទធំៗ, ទស្សនទាន ឬទ្រឹស្តីគន្លឹះ, និយមន័យសំខាន់ៗ, និងការសន្និដ្ឋាន។
+- ត្រូវភ្ជាប់លេខទំព័រយោង [ទំព័រ X] នៅរាល់ចំណុច ឬកថាខណ្ឌនីមួយៗ។`
       : '';
 
     return `
@@ -249,7 +276,7 @@ class AIService {
 ២. ${notFoundInstruction}
 ៣. ដាច់ខាតកុំប្រឌិតព័ត៌មាន ឬយោងទំព័រដែលមិនមានក្នុងឯកសារ។
 ៤. នៅចុងបញ្ចប់នៃគំនិត ឬចម្លើយនីមួយៗ សូមបញ្ជាក់លេខទំព័រយោងជាទម្រង់ [ទំព័រ X] (ឧទាហរណ៍៖ [ទំព័រ ${relevantPages[0] || 1}])។
-៥. ${langInstruction}${quizInstruction}
+៥. ${langInstruction}${quizInstruction}${overviewInstruction}
 
 --- [ខ្លឹមសារដកស្រង់ចេញពីសៀវភៅ / PASSAGES FROM PDF] ---
 ${contextText}
@@ -266,9 +293,13 @@ ${contextText}
    * Construct Action prompt
    */
   buildActionPrompt({ action, text, bookTitle, pageNumber, targetLang }) {
+    const isSourceKhmer = /[\u1780-\u17FF]/.test(text || '');
+
     const langInstruction = targetLang === 'en'
       ? 'Respond strictly in English.'
-      : 'សូមឆ្លើយតបជាភាសាខ្មែរសុទ្ធសាធ ១០០% ឲ្យបានពិរោះ ត្រឹមត្រូវ និងច្បាស់លាស់ ដោយមិនប្រើប្រាស់ភាសាអង់គ្លេសឡើយ។';
+      : (action === 'translate'
+          ? 'គោលការណ៍បកប្រែដាច់ខាត៖ គោលដៅចម្បងនៃកម្មវិធីអានសៀវភៅគឺបកប្រែជា «ភាសាខ្មែរ» ១០០% ឱ្យបានក្បោះក្បាយ ពិរោះ រលូន និងងាយយល់ ដើម្បីឱ្យអ្នកប្រើប្រាស់អាចអាន និងស្ដាប់ជាសំឡេងខ្មែរ (Khmer Text-to-Speech) បានយ៉ាងច្បាស់ល្អ។ ដាច់ខាតមិនបកប្រែ ឬឆ្លើយតបជាភាសាអង់គ្លេសឡើយ (រាល់ពាក្យពេចន៍ និងការបកប្រែទាំងអស់ត្រូវតែជាភាសាខ្មែរ ១០០% លើកលែងតែពាក្យដើមបរទេសក្នុងវង់ក្រចកនៃសទ្ទានុក្រម)។'
+          : 'គោលការណ៍ភាសាដាច់ខាត៖ សូមឆ្លើយតបជា «ភាសាខ្មែរ» សុទ្ធសាធ ១០០% ឲ្យបានពិរោះ ត្រឹមត្រូវ និងច្បាស់លាស់ ដោយដាច់ខាតមិនប្រើប្រាស់ភាសាអង់គ្លេសឡើយ។');
 
     const pageCitation = pageNumber ? ` (ទំព័រទី ${pageNumber})` : '';
 
@@ -281,9 +312,23 @@ ${contextText}
         taskInstruction = `សូមពន្យល់ខ្លឹមសារខាងក្រោមនេះឲ្យបានស៊ីជម្រៅ ដោយប្រើពាក្យពេចន៍ងាយយល់ និងលើកឧទាហរណ៍ជាក់ស្តែងប្រសិនបើចាំបាច់${pageCitation}។`;
         break;
       case 'translate':
-        taskInstruction = targetLang === 'en'
-          ? 'Please translate the following text into natural, accurate English.'
-          : 'សូមបកប្រែអត្ថបទខាងក្រោមនេះទៅជាភាសាខ្មែរដ៏ត្រឹមត្រូវ ពិរោះ និងរក្សាអត្ថន័យដើម១០០%។';
+        if (isSourceKhmer) {
+          taskInstruction = `សូមធ្វើការបកប្រែ និងសម្រួលអត្ថបទខាងក្រោមនេះជា «ភាសាខ្មែរសម្រាយងាយយល់» (Khmer Translation & Simplification) ឱ្យបានត្រឹមត្រូវ ១០០% តាមន័យដើមនៃសៀវភៅ ដើម្បីឱ្យអ្នកប្រើប្រាស់ងាយស្រួលអាន និងស្ដាប់ជាសំឡេងខ្មែរ (TTS Audio Playback)${pageCitation}។
+គោលការណ៍បកប្រែ និងសម្រួលជាភាសាខ្មែរ៖
+១. ត្រូវបកប្រែ សម្រួល និងពន្យល់ឃ្លាប្រយោគជា «ភាសាខ្មែរ» ឱ្យបានច្បាស់លាស់ ពិរោះ រលូន និងត្រឹមត្រូវតាមក្បួនខ្នាតភាសាខ្មែរ ដោយកុំប្រើពាក្យកាត់ ឬប្រយោគស្មុគស្មាញ ដើម្បីឱ្យម៉ាស៊ីនអានសំឡេងខ្មែរ (Text-to-Speech) បញ្ចេញសំឡេងបានច្បាស់ និងងាយស្ដាប់យល់។ ដាច់ខាតកុំបកប្រែជាភាសាអង់គ្លេសឡើយ!
+២. រក្សាខ្លឹមសារ និងអត្ថន័យដើមនៃសៀវភៅ ១០០% ដោយមិនកាត់បន្ថយ និងមិនប្រឌិត។
+៣. រៀបចំលទ្ធផលជាទម្រង់ដូចខាងក្រោម៖
+   - 🌐 **ការបកប្រែជាភាសាខ្មែរ (Khmer Translation)**៖ អត្ថបទជាភាសាខ្មែរសម្រាយ ពិរោះ រលូន និងងាយស្រួលស្ដាប់។
+   - 📖 **សទ្ទានុក្រមពាក្យបច្ចេកទេស (Key Terminology)**៖ បញ្ជីពាក្យបច្ចេកទេស និងការពន្យល់ន័យជាភាសាខ្មែរ។`;
+        } else {
+          taskInstruction = `សូមធ្វើការបកប្រែអត្ថបទខាងក្រោមនេះពី «ភាសាបរទេស/អង់គ្លេស» ទៅជា «ភាសាខ្មែរ» (Translation to Khmer) ឱ្យបានត្រឹមត្រូវ ១០០% តាមន័យដើមនៃសៀវភៅ ដើម្បីឱ្យអ្នកប្រើប្រាស់ងាយស្រួលអាន និងស្ដាប់ជាសំឡេងខ្មែរ (TTS Audio Playback)${pageCitation}។
+គោលការណ៍បកប្រែជាភាសាខ្មែរ៖
+១. ត្រូវបកប្រែប្រយោគ និងកថាខណ្ឌនីមួយៗទៅជា «ភាសាខ្មែរ» ឱ្យបានត្រឹមត្រូវ ១០០% តាមខ្លឹមសារដើមនៃសៀវភៅ ដោយប្រើប្រាស់ពាក្យខ្មែរត្រឹមត្រូវ ពិរោះ និងរលូនល្អសម្រាប់ម៉ាស៊ីនអានសំឡេងខ្មែរ (Text-to-Speech)។ ដាច់ខាតមិនឆ្លើយតបជាភាសាអង់គ្លេសឡើយ!
+២. រក្សាពាក្យបច្ចេកទេស និងទស្សនទានឱ្យបានត្រឹមត្រូវតាមបរិបទនៃសៀវភៅ។
+៣. រៀបចំលទ្ធផលជាទម្រង់ដូចខាងក្រោម៖
+   - 🌐 **ការបកប្រែជាភាសាខ្មែរ (Khmer Translation)**៖ អត្ថបទបកប្រែជាភាសាខ្មែរពេញលេញ ក្បោះក្បាយ និងពិរោះងាយស្ដាប់។
+   - 📖 **សទ្ទានុក្រមពាក្យបច្ចេកទេស (Key Terminology)**៖ បញ្ជីពាក្យបច្ចេកទេសសំខាន់ៗ (ភាសាដើម = ភាសាខ្មែរ) ដើម្បីងាយស្រួលផ្ទៀងផ្ទាត់។`;
+        }
         break;
       case 'define':
         taskInstruction = `សូមស្រង់ពាក្យពិបាកៗ ពាក្យគន្លឹះ ឬពាក្យបច្ចេកទេសក្នុងអត្ថបទខាងក្រោម រួចពន្យល់និយមន័យនៃពាក្យនីមួយៗតាមបរិបទនៃសៀវភៅ${pageCitation}។`;

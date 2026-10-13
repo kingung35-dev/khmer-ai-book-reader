@@ -16,7 +16,7 @@
   <link rel="icon" type="image/svg+xml" href="icons/app-icon.svg">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   
-  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/styles.css?v=2.2.0">
   
   <!-- PDF.js & Marked scripts -->
   <script src="libs/pdfjs/pdf.min.js"></script>
@@ -106,8 +106,9 @@
 
       <!-- Right: Document Actions, Settings, and AI Toggle -->
       <div class="header-right">
-        <button id="btn-read-page-aloud" class="btn-icon" title="អានទំព័រនេះជាសំឡេង (Read Page Aloud)">
-          <span style="font-size: 1.15rem;">🔊</span>
+        <button id="btn-read-page-aloud" class="btn-read-aloud-header" title="អានសៀវភៅច្បាប់ដើមជាសំឡេង (Read Book Aloud)">
+          <span class="read-icon">🔊</span>
+          <span class="read-text">អានសៀវភៅជាសំឡេង</span>
         </button>
 
         <button id="btn-add-bookmark" class="btn-icon" title="ចំណាំទំព័រនេះ (Add Bookmark)">
@@ -128,6 +129,10 @@
 
         <button id="btn-open-settings" class="btn-icon" title="ការកំណត់ប្រព័ន្ធ & AI (Settings)">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </button>
+
+        <button id="btn-open-page-actions" class="btn-icon" title="ជ្រើសរើសទំព័រ & អនុវត្តសកម្មភាព AI (AI Page Action Studio)">
+          <span style="font-size: 1.15rem;">⚡</span>
         </button>
 
         <button id="btn-toggle-ai" class="btn-icon active" title="បិទ/បើក ជំនួយការ AI (Toggle AI Assistant)">
@@ -224,6 +229,74 @@
           <button class="selection-btn" id="btn-sel-define">📖 ពាក្យពិបាក</button>
           <button class="selection-btn" id="btn-sel-copy">📋 ចម្លង</button>
         </div>
+
+        <!-- Floating Original Book Audio Narration Player -->
+        <div id="book-audio-player" class="book-audio-player" style="display: none;">
+          <!-- Top Row: Title, Page Info, and Header Actions -->
+          <div class="bap-header">
+            <div class="bap-title-wrap">
+              <span class="bap-icon-wave">
+                <span class="wave-bar"></span>
+                <span class="wave-bar"></span>
+                <span class="wave-bar"></span>
+                <span class="wave-bar"></span>
+              </span>
+              <span class="bap-badge">📖 អានសៀវភៅច្បាប់ដើម</span>
+              <span id="bap-book-title" class="bap-title">សៀវភៅ</span>
+              <span id="bap-page-indicator" class="bap-page-indicator">ទំព័រទី 1</span>
+            </div>
+            <div class="bap-header-actions">
+              <label class="bap-toggle-label" title="អានបន្តស្វ័យប្រវត្តទៅទំព័របន្ទាប់ពេលចប់ទំព័រនេះ">
+                <input type="checkbox" id="bap-toggle-autoplay" checked>
+                <span class="bap-toggle-text">🔄 អានបន្តស្វ័យប្រវត្ត</span>
+              </label>
+              <button id="bap-btn-close" class="bap-btn-close" title="បិទរបារចាក់សំឡេង (Close)">✕</button>
+            </div>
+          </div>
+
+          <!-- Middle Row: Spoken Sentence Highlight Box -->
+          <div class="bap-sentence-wrap">
+            <div class="bap-sentence-header">
+              <span id="bap-progress-info" class="bap-progress-info">ប្រយោគ ១ / ១</span>
+              <span id="bap-status-text" class="bap-status-text">ត្រៀមខ្លួនអាន</span>
+            </div>
+            <div id="bap-current-sentence" class="bap-current-sentence">
+              សូមរង់ចាំ...
+            </div>
+          </div>
+
+          <!-- Bottom Row: Audio Controls -->
+          <div class="bap-controls">
+            <button id="bap-btn-prev-page" class="bap-btn bap-btn-page" title="ទំព័រមុន (Previous Page)">
+              ⏮️ <span class="btn-page-text">ទំព័រមុន</span>
+            </button>
+            <button id="bap-btn-prev-sentence" class="bap-btn" title="ប្រយោគមុន (Previous Sentence)">
+              ⏪
+            </button>
+            <button id="bap-btn-play-pause" class="bap-btn bap-btn-play" title="ចាក់ / ផ្អាក (Play/Pause)">
+              <span id="bap-play-icon">▶️</span>
+              <span id="bap-play-text">អាន</span>
+            </button>
+            <button id="bap-btn-stop" class="bap-btn" title="បញ្ឈប់ (Stop)">
+              ⏹️
+            </button>
+            <button id="bap-btn-next-sentence" class="bap-btn" title="ប្រយោគបន្ទាប់ (Next Sentence)">
+              ⏩
+            </button>
+            <button id="bap-btn-next-page" class="bap-btn bap-btn-page" title="ទំព័របន្ទាប់ (Next Page)">
+              <span class="btn-page-text">ទំព័របន្ទាប់</span> ⏭️
+            </button>
+
+            <!-- Speed selector -->
+            <div class="bap-speed-wrapper">
+              <select id="bap-select-speed" class="bap-select-speed" title="ល្បឿនអាន">
+                <option value="0.8">0.8x (យឺត)</option>
+                <option value="1.0" selected>1.0x (ធម្មតា)</option>
+                <option value="1.2">1.2x (រហ័ស)</option>
+              </select>
+            </div>
+          </div>
+        </div>
       </section>
 
       <!-- Right Sidebar (AI Reading Assistant) -->
@@ -240,21 +313,54 @@
           </button>
         </div>
 
-        <!-- Scope selector: Whole Book vs Current Page -->
-        <div class="ai-scope-toggle">
-          <button class="scope-btn active" id="btn-scope-book" data-scope="book">📖 សៀវភៅទាំងមូល</button>
-          <button class="scope-btn" id="btn-scope-page" data-scope="page">📄 ទំព័របច្ចុប្បន្ន (<span id="label-scope-current-page">1</span>)</button>
+        <!-- Target / Page Scope Selector (Page vs Range vs Whole Book) -->
+        <div class="ai-scope-wrapper">
+          <div class="ai-scope-toggle">
+            <button class="scope-btn" id="btn-scope-page" data-scope="page" title="ជ្រើសរើសទំព័របច្ចុប្បន្ន">
+              📄 ទំព័រនេះ (<span id="label-scope-current-page">1</span>)
+            </button>
+            <button class="scope-btn" id="btn-scope-range" data-scope="range" title="ជ្រើសរើសចន្លោះទំព័រជាក់លាក់ (Range)">
+              📑 ចន្លោះទំព័រ
+            </button>
+            <button class="scope-btn active" id="btn-scope-book" data-scope="book" title="សៀវភៅទាំងមូល">
+              📖 ទាំងមូល
+            </button>
+          </div>
+
+          <!-- Page Range Selector Controls (Visible when 'range' is selected) -->
+          <div class="page-range-panel" id="page-range-panel" style="display: none;">
+            <div class="range-inputs-row">
+              <span class="range-badge-label">ពីទំព័រ</span>
+              <input type="number" id="input-range-start" class="range-num-input" min="1" value="1" title="ទំព័រចាប់ផ្តើម">
+              <span class="range-badge-sep">ដល់</span>
+              <input type="number" id="input-range-end" class="range-num-input" min="1" value="1" title="ទំព័របញ្ចប់">
+              <span class="range-total-info">/ <span id="label-range-total-pages">1</span></span>
+            </div>
+            <div class="range-presets-row">
+              <button type="button" class="btn-range-preset" data-preset="10">+១០ ទំព័រ</button>
+              <button type="button" class="btn-range-preset" data-preset="20">+២០ ទំព័រ</button>
+              <button type="button" class="btn-range-preset" data-preset="50">+៥០ ទំព័រ</button>
+              <button type="button" class="btn-range-preset" data-preset="all">ទាំងអស់</button>
+            </div>
+          </div>
+
+          <!-- Target Indicator Badge & Modal Launcher -->
+          <div class="action-target-indicator">
+            <span class="target-indicator-icon">🎯</span>
+            <span class="target-indicator-text">គោលដៅ៖ <strong id="label-action-target">សៀវភៅទាំងមូល</strong></span>
+            <button type="button" class="btn-open-action-studio" id="btn-open-action-studio" title="បើកផ្ទាំងជ្រើសរើសទំព័រ & សកម្មភាព AI">⚡ ជ្រើសរើស...</button>
+          </div>
         </div>
 
-        <!-- Quick Action Chips -->
+        <!-- Quick Action Chips (7 Actions: Summarize, Explain, Translate, Define, Q&A, Quiz, Chapter Summary) -->
         <div class="quick-actions-bar">
-          <button class="action-chip" data-action="summarize">📝 សង្ខេបទំព័រនេះ</button>
-          <button class="action-chip" data-action="explain">💡 ពន្យល់ខ្លឹមសារ</button>
-          <button class="action-chip" data-action="translate">🌐 បកប្រែ</button>
-          <button class="action-chip" data-action="define">📖 ពន្យល់ពាក្យពិបាក</button>
-          <button class="action-chip" data-action="generate_qa">❓ សំណួរ-ចម្លើយ</button>
-          <button class="action-chip" data-action="generate_quiz">🎯 លំហាត់ Quiz</button>
-          <button class="action-chip" data-action="summarize_chapter">🔍 សង្ខេបជំពូក</button>
+          <button class="action-chip" data-action="summarize" title="សង្ខេបចំណុចសំខាន់ៗនៃទំព័រ ឬចន្លោះទំព័រដែលបានជ្រើស">📝 សង្ខេប</button>
+          <button class="action-chip" data-action="explain" title="ពន្យល់ខ្លឹមសារឱ្យស៊ីជម្រៅ និងងាយយល់">💡 ពន្យល់ខ្លឹមសារ</button>
+          <button class="action-chip" data-action="translate" title="បកប្រែជាភាសាខ្មែរ">🌐 បកប្រែ</button>
+          <button class="action-chip" data-action="define" title="ពន្យល់ពាក្យពិបាក និងពាក្យបច្ចេកទេស">📖 ពាក្យពិបាក</button>
+          <button class="action-chip" data-action="generate_qa" title="បង្កើតសំណួរ និងចម្លើយនៃមេរៀន">❓ សំណួរ-ចម្លើយ</button>
+          <button class="action-chip" data-action="generate_quiz" title="បង្កើតលំហាត់ Quiz ពហុជ្រើសរើស (MCQ)">🎯 លំហាត់ Quiz</button>
+          <button class="action-chip" data-action="summarize_chapter" title="វិភាគ និងសង្ខេបជំពូក ឬមេរៀន">🔍 សង្ខេបជំពូក</button>
         </div>
 
         <!-- Chat Stream -->
@@ -283,6 +389,12 @@
             <div class="chat-input-toolbar">
               <span class="chat-input-hint">ចុច Shift + Enter ដើម្បីចុះបន្ទាត់</span>
               
+              <!-- Stop AI Generation / Audio Button -->
+              <button type="button" id="btn-stop-chat" class="btn-stop-ai" style="display: none;" title="បញ្ឈប់ការបង្កើតរបស់ AI ឬសំឡេង (Stop AI Generation)">
+                <span class="stop-icon">⏹</span>
+                <span>បញ្ឈប់</span>
+              </button>
+
               <button id="btn-send-chat" class="btn-send" title="ផ្ញើសំណួរ (Send)">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
               </button>
@@ -428,6 +540,155 @@
       </div>
     </div>
 
+    <!-- AI Page Action Studio Modal (ជ្រើសរើសទំព័រ & អនុវត្តសកម្មភាព AI) -->
+    <div class="modal-overlay" id="modal-page-actions">
+      <div class="modal-dialog modal-page-actions-dialog">
+        <div class="modal-header">
+          <h3 class="modal-title">⚡ ជ្រើសរើសទំព័រសម្រាប់អនុវត្តសកម្មភាព AI</h3>
+          <button class="btn-icon" id="btn-close-page-actions-x">✕</button>
+        </div>
+        
+        <div class="modal-body">
+          <!-- Step 1: Select Target Page(s) -->
+          <div class="studio-section">
+            <div class="studio-section-title">
+              <span class="step-badge">១</span>
+              <strong>ជ្រើសរើសទំព័រគោលដៅ (Target Selection)</strong>
+            </div>
+            
+            <div class="target-options-grid">
+              <label class="target-option-card" id="opt-card-page">
+                <input type="radio" name="studio-scope" value="page" id="radio-studio-page">
+                <div class="option-card-content">
+                  <div class="option-icon">📄</div>
+                  <div class="option-title">ទំព័របច្ចុប្បន្ន</div>
+                  <div class="option-desc">ទំព័រទី <span id="studio-current-page-num">1</span></div>
+                </div>
+              </label>
+
+              <label class="target-option-card selected" id="opt-card-range">
+                <input type="radio" name="studio-scope" value="range" id="radio-studio-range" checked>
+                <div class="option-card-content">
+                  <div class="option-icon">📑</div>
+                  <div class="option-title">ចន្លោះទំព័រជាក់លាក់</div>
+                  <div class="option-desc">ជ្រើសរើសពីទំព័រ A ដល់ B</div>
+                </div>
+              </label>
+
+              <label class="target-option-card" id="opt-card-book">
+                <input type="radio" name="studio-scope" value="book" id="radio-studio-book">
+                <div class="option-card-content">
+                  <div class="option-icon">📖</div>
+                  <div class="option-title">សៀវភៅទាំងមូល</div>
+                  <div class="option-desc">គ្រប់ទំព័រ (1 ដល់ <span id="studio-book-total-pages">1</span>)</div>
+                </div>
+              </label>
+            </div>
+
+            <!-- Range input fields in modal -->
+            <div class="studio-range-inputs" id="studio-range-box">
+              <div class="studio-range-row">
+                <div class="studio-input-group">
+                  <label for="studio-range-start">ចាប់ពីទំព័រទី៖</label>
+                  <input type="number" id="studio-range-start" class="form-input studio-num-input" min="1" value="1">
+                </div>
+                <div class="studio-range-arrow">➔</div>
+                <div class="studio-input-group">
+                  <label for="studio-range-end">រហូតដល់ទំព័រទី៖</label>
+                  <input type="number" id="studio-range-end" class="form-input studio-num-input" min="1" value="1">
+                </div>
+                <div class="studio-range-summary">
+                  <span id="studio-range-count-badge" class="range-count-badge">សរុប ១ ទំព័រ</span>
+                </div>
+              </div>
+
+              <!-- Quick presets -->
+              <div class="studio-preset-buttons">
+                <button type="button" class="btn-studio-preset" data-preset="current-lesson">មេរៀននេះ</button>
+                <button type="button" class="btn-studio-preset" data-preset="next-10">+១០ ទំព័រ</button>
+                <button type="button" class="btn-studio-preset" data-preset="next-20">+២០ ទំព័រ</button>
+                <button type="button" class="btn-studio-preset" data-preset="pages-12-184">ទំព័រ ១២ ដល់ ១៨៤</button>
+                <button type="button" class="btn-studio-preset" data-preset="all">សៀវភៅទាំងមូល</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Step 2: Choose 1 of 7 AI Actions -->
+          <div class="studio-section">
+            <div class="studio-section-title">
+              <span class="step-badge">២</span>
+              <strong>ជ្រើសរើសប្រភេទសកម្មភាព AI (Choose Action)</strong>
+            </div>
+
+            <div class="studio-actions-grid">
+              <button type="button" class="studio-action-card active" data-action="summarize">
+                <div class="studio-action-icon">📝</div>
+                <div class="studio-action-info">
+                  <div class="studio-action-name">សង្ខេប (Summarize)</div>
+                  <div class="studio-action-desc">សង្ខេបជាចំណុចសំខាន់ៗ (Bullet Points) ខ្លី ខ្លឹម ងាយយល់</div>
+                </div>
+              </button>
+
+              <button type="button" class="studio-action-card" data-action="explain">
+                <div class="studio-action-icon">💡</div>
+                <div class="studio-action-info">
+                  <div class="studio-action-name">ពន្យល់ខ្លឹមសារ (Explain)</div>
+                  <div class="studio-action-desc">ពន្យល់ខ្លឹមសារមេរៀនឱ្យស៊ីជម្រៅ និងលើកឧទាហរណ៍ជាក់ស្តែង</div>
+                </div>
+              </button>
+
+              <button type="button" class="studio-action-card" data-action="translate">
+                <div class="studio-action-icon">🌐</div>
+                <div class="studio-action-info">
+                  <div class="studio-action-name">បកប្រែ (Translate)</div>
+                  <div class="studio-action-desc">បកប្រែខ្លឹមសារជាភាសាខ្មែរត្រឹមត្រូវ ពិរោះ និងរក្សាអត្ថន័យដើម</div>
+                </div>
+              </button>
+
+              <button type="button" class="studio-action-card" data-action="define">
+                <div class="studio-action-icon">📖</div>
+                <div class="studio-action-info">
+                  <div class="studio-action-name">ពន្យល់ពាក្យពិបាក (Define Terms)</div>
+                  <div class="studio-action-desc">ស្រង់ពាក្យគន្លឹះ ពាក្យបច្ចេកទេស និងពន្យល់និយមន័យលម្អិត</div>
+                </div>
+              </button>
+
+              <button type="button" class="studio-action-card" data-action="generate_qa">
+                <div class="studio-action-icon">❓</div>
+                <div class="studio-action-info">
+                  <div class="studio-action-name">សំណួរ-ចម្លើយ (Q&A)</div>
+                  <div class="studio-action-desc">បង្កើតសំណួរ និងចម្លើយសំខាន់ៗនៃមេរៀនសម្រាប់រៀនសូត្រ</div>
+                </div>
+              </button>
+
+              <button type="button" class="studio-action-card" data-action="generate_quiz">
+                <div class="studio-action-icon">🎯</div>
+                <div class="studio-action-info">
+                  <div class="studio-action-name">លំហាត់ Quiz (MCQ)</div>
+                  <div class="studio-action-desc">បង្កើតលំហាត់ពហុជ្រើសរើស (ក, ខ, គ, ឃ) ព្រមទាំងចម្លើយ និងការពន្យល់</div>
+                </div>
+              </button>
+
+              <button type="button" class="studio-action-card" data-action="summarize_chapter">
+                <div class="studio-action-icon">🔍</div>
+                <div class="studio-action-info">
+                  <div class="studio-action-name">សង្ខេបជំពូក (Chapter Summary)</div>
+                  <div class="studio-action-desc">វិភាគ និងសង្ខេបជំពូកធំៗ ចំណុចគន្លឹះ និងលទ្ធផលសិក្សា</div>
+                </div>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary" id="btn-close-page-actions">បោះបង់</button>
+          <button type="button" class="btn-primary" id="btn-execute-page-action">
+            <span>🚀 ចាប់ផ្តើមដំណើរការ AI លើទំព័រដែលបានជ្រើសរើស</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- Mobile Drawer Backdrop (tapping closes open drawer on phone) -->
     <div class="mobile-drawer-backdrop" id="mobile-drawer-backdrop"></div>
 
@@ -471,10 +732,11 @@
   </div>
 
   <!-- Application Modules -->
-  <script src="js/settings.js"></script>
-  <script src="js/library.js"></script>
-  <script src="js/pdf-reader.js"></script>
-  <script src="js/ai-assistant.js"></script>
-  <script src="js/app.js"></script>
+  <script src="js/settings.js?v=2.2.0"></script>
+  <script src="js/library.js?v=2.2.0"></script>
+  <script src="js/pdf-reader.js?v=2.2.0"></script>
+  <script src="js/book-audio-player.js?v=2.2.0"></script>
+  <script src="js/ai-assistant.js?v=2.2.0"></script>
+  <script src="js/app.js?v=2.2.0"></script>
 </body>
 </html>

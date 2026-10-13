@@ -116,11 +116,22 @@ class RetrievalService {
    * @param {number} maxChunks - Maximum number of chunks to return
    * @returns {Array} Ranked relevant chunks with scores
    */
-  retrieveRelevantChunks(chunks, query, targetPage = null, maxChunks = 15) {
+  retrieveRelevantChunks(chunks, query, targetPage = null, maxChunks = 15, options = {}) {
     if (!chunks || chunks.length === 0) return [];
 
-    // 1. Check if user specified a page range (e.g. from page 12 to 184)
-    const pageRange = this.extractMentionedRange(query);
+    // 1. Check if user specified a page range (via options or mentioned in query)
+    let pageRange = null;
+    if (options && options.startPage && options.endPage) {
+      pageRange = {
+        startPage: Math.min(parseInt(options.startPage, 10), parseInt(options.endPage, 10)),
+        endPage: Math.max(parseInt(options.startPage, 10), parseInt(options.endPage, 10))
+      };
+    } else if (options && options.pageRange) {
+      pageRange = options.pageRange;
+    } else {
+      pageRange = this.extractMentionedRange(query);
+    }
+
     if (pageRange) {
       const { startPage, endPage } = pageRange;
       const inRange = chunks.filter(c => c.pageNumber >= startPage && c.pageNumber <= endPage);
@@ -144,8 +155,8 @@ class RetrievalService {
     }
 
     // 2. Check if user requested the entire book
-    const isWholeBook = this.isWholeBookQuery(query);
-    if (isWholeBook && (targetPage === null || targetPage === undefined)) {
+    const isWholeBook = (options && options.scope === 'book') || this.isWholeBookQuery(query);
+    if (isWholeBook) {
       const cleanAll = chunks.filter(c => this.isCleanText(c.text));
       const pool = cleanAll.length > 0 ? cleanAll : chunks;
 

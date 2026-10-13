@@ -152,7 +152,61 @@ async function runTests() {
     assert(prompt.includes('១៥ ទៅ ២០ សំណួរ'), 'Grounded prompt must require rich question count');
   });
 
-  // 8. Page Range & Whole Book Detection Tests
+  // 8. Faithful Translation to Khmer for Audio Playback Tests
+  test('AI Prompt - generates faithful translation to Khmer prompt for Khmer source text (for audio playback)', () => {
+    const prompt = aiService.buildActionPrompt({
+      action: 'translate',
+      text: 'ចិត្តវិទ្យា គឺជាវិទ្យាសាស្ត្រមួយដែលសិក្សាអំពីបាតុភូតចិត្តរបស់មនុស្ស។',
+      bookTitle: 'ចិត្តវិទ្យា',
+      pageNumber: 12,
+      targetLang: 'km'
+    });
+    assert(prompt.includes('ភាសាខ្មែរសម្រាយងាយយល់'), 'Khmer text should trigger Khmer simplification/translation');
+    assert(prompt.includes('TTS Audio Playback'), 'Prompt must instruct audio-friendly synthesis');
+    assert(prompt.includes('បកប្រែជាភាសាខ្មែរ'), 'Prompt must instruct translation to Khmer');
+  });
+
+  test('AI Prompt - generates faithful translation to Khmer prompt for English source text (for audio playback)', () => {
+    const prompt = aiService.buildActionPrompt({
+      action: 'translate',
+      text: 'Psychology is the scientific study of mind and behavior.',
+      bookTitle: 'Psychology 101',
+      pageNumber: 1,
+      targetLang: 'km'
+    });
+    assert(prompt.includes('Translation to Khmer'), 'English text should trigger English to Khmer translation instructions');
+    assert(prompt.includes('បកប្រែជាភាសាខ្មែរ'), 'Prompt must include Khmer translation section');
+    assert(prompt.includes('សទ្ទានុក្រមពាក្យបច្ចេកទេស'), 'Prompt must include terminology glossary section');
+  });
+
+  test('AI Prompt - grounded QA translate query enables faithful translation instructions to Khmer', () => {
+    const prompt = aiService.buildGroundedPrompt({
+      question: 'សូមបកប្រែទំព័រទី ១២ នេះ',
+      contextText: 'ចិត្តវិទ្យា គឺជាវិទ្យាសាស្ត្រមួយដែលសិក្សាអំពីបាតុភូតចិត្ត',
+      targetLang: 'km',
+      scope: 'page',
+      currentPage: 12,
+      relevantPages: [12]
+    });
+    assert(prompt.includes('FAITHFUL TRANSLATION MODE'), 'Grounded prompt must enter faithful translation mode');
+    assert(prompt.includes('បកប្រែជាភាសាខ្មែរ'), 'Grounded prompt must instruct translation to Khmer');
+    assert(prompt.includes('[ទំព័រ 12]'), 'Grounded prompt must instruct citation preservation');
+  });
+
+  test('AI Prompt - user complaint mentioning English never forces English output', () => {
+    const prompt = aiService.buildGroundedPrompt({
+      question: 'អ្នកនៅតែបន្តធ្វើការបកប្រែទៅជាភាសាអង់គ្លេសដដែល។',
+      contextText: 'ចិត្តវិទ្យា គឺជាវិទ្យាសាស្ត្រមួយដែលសិក្សាអំពីបាតុភូតចិត្ត',
+      targetLang: 'km',
+      scope: 'page',
+      currentPage: 1,
+      relevantPages: [1]
+    });
+    assert(!prompt.includes('Respond strictly in English'), 'Prompt must NEVER instruct Gemini to respond in English');
+    assert(prompt.includes('បកប្រែ និងឆ្លើយតបជា «ភាសាខ្មែរ»'), 'Prompt must enforce Khmer translation and response');
+  });
+
+  // 9. Page Range & Whole Book Detection Tests
   test('Retrieval Service - extracts page ranges accurately in Khmer and English numerals', () => {
     const range1 = retrievalService.extractMentionedRange('សូមបង្កើតលំហាត់ Quiz ឱ្យបាន ១០០ ចេញពីសៀវភៅនេះទាំងមូល ព្រមទាំងមានចម្លើយ ចាប់ពីទំព័រទី12 រហូតដល់ទំព័រទី184។');
     assert.deepStrictEqual(range1, { startPage: 12, endPage: 184 });
@@ -190,6 +244,27 @@ async function runTests() {
     assert(resultPages.includes(20), 'Should include page 20');
     assert(!resultPages.includes(5), 'Should not include page 5 (outside range)');
     assert(!resultPages.includes(190), 'Should not include page 190 (outside range)');
+  });
+
+  // 10. Original Book Audio Narration Tests
+  test('Book Audio Narration - extracts and normalizes original book page text', () => {
+    const meta = pdfService.getMetadata('44b3599e-ccba-4ab7-9da8-a6f7987abfeb');
+    assert(meta, 'Metadata must exist for sample book');
+    const p12Chunks = meta.chunks.filter(c => c.pageNumber === 12);
+    assert(p12Chunks.length > 0, 'Page 12 must have indexed chunks from original book');
+    const combined = p12Chunks.map(c => c.text).join('\n\n');
+    const normalized = pdfService.normalizeKhmerText(combined);
+    assert(normalized.includes('ចិត្តវិទ្យា'), 'Normalized text must contain book keywords');
+    assert(normalized.length > 100, 'Original page text must have substantive length');
+  });
+
+  test('Book Audio Narration - splits Khmer original book text into sentence chunks under 130 chars', () => {
+    const raw = `មេរៀនទី១ សញ្ញាណទូទៅចិត្តវិទ្យា។ ១- វត្ថុបំណង៖ ក្រោយពីសិក្សាមេរៀនចប់ គរុសិស្សនឹងប្រាប់បានពីបញ្ញត្តិចិត្តវិទ្យា បាតុភូតចិត្ត និងធម្មជាតិនៃបាតុភូតចិត្តរបស់មនុស្ស។ ២- សេចក្តីផ្តើម៖ ចិត្តវិទ្យា ជាមាតាលើគ្រប់វិស័យ ជាមុខវិជ្ជាដែលមានសារៈប្រយោជន៍ដែលមនុស្សគ្រប់រូបត្រូវយល់ដឹង។`;
+    const parts = raw.split(/(?<=[។៕!?\n])/).map(s => s.trim()).filter(Boolean);
+    assert(parts.length >= 3, 'Must split on Khmer full stops');
+    for (const p of parts) {
+      assert(p.length <= 160, 'Sentences must be concise for TTS synthesis');
+    }
   });
 
   console.log(`\n========================================`);

@@ -22,8 +22,8 @@ async function ensureKhmerText(text) {
   const latinMatches = text.match(/[A-Za-z]/g) || [];
   const khmerMatches = text.match(/[\u1780-\u17FF]/g) || [];
 
-  // If text contains substantial Latin words (foreign document or mixed text)
-  if (latinMatches.length > 4 && (khmerMatches.length === 0 || latinMatches.length > khmerMatches.length * 0.2)) {
+  // If text contains Latin words (foreign words, book title, or English terms)
+  if (latinMatches.length >= 2 && (khmerMatches.length === 0 || latinMatches.length > khmerMatches.length * 0.15)) {
     try {
       const gUrl = `https://translate.googleapis.com/translate_a/single?client=dict-chrome-ex&sl=auto&tl=km&dt=t&q=${encodeURIComponent(text.substring(0, 1000))}`;
       const gRes = await fetch(gUrl, {

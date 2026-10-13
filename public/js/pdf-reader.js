@@ -133,7 +133,9 @@ class PdfReader {
     });
 
     this.btnSelSpeak?.addEventListener('click', () => {
-      if (this.selectedText && window.khmerAudioPlayer) {
+      if (this.selectedText && window.bookAudioPlayer) {
+        window.bookAudioPlayer.speakSelectedText(this.selectedText);
+      } else if (this.selectedText && window.khmerAudioPlayer) {
         window.khmerAudioPlayer.speak(this.selectedText, this.btnSelSpeak);
       }
       this.hideSelectionToolbar();
@@ -613,30 +615,9 @@ class PdfReader {
     }
   }
 
-  async readCurrentPageAloud() {
-    if (!this.pdfDoc) {
-      window.showToast('សូមបើកសៀវភៅមួយជាមុនសិន', 'error');
-      return;
-    }
-
-    try {
-      const page = await this.pdfDoc.getPage(this.currentPage);
-      const textContent = await page.getTextContent();
-      const pageText = textContent.items.map(s => s.str).join(' ').trim();
-
-      if (!pageText || pageText.length < 5) {
-        window.showToast(`ទំព័រទី ${this.currentPage} គ្មានអក្សរស្រង់ស្រាប់ទេ (ប្រហែលជារូបភាពស្កេន)`, 'error');
-        return;
-      }
-
-      const narrationText = `ទំព័រទី ${this.currentPage}។ ${pageText}`;
-
-      if (window.khmerAudioPlayer) {
-        window.khmerAudioPlayer.speak(narrationText, this.btnReadAloud);
-      }
-    } catch (err) {
-      console.error('Failed to read page text:', err);
-      window.showToast(`កំហុសក្នុងការទាញយកអត្ថបទ: ${err.message}`, 'error');
+  readCurrentPageAloud() {
+    if (window.bookAudioPlayer) {
+      window.bookAudioPlayer.startReadingCurrentPage();
     }
   }
 
