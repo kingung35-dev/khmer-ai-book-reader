@@ -72,16 +72,18 @@ class PdfService {
 
         const normalized = this.normalizeKhmerText(pageText);
         const pageNum = pageData.pageIndex + 1;
-        const isScannedOrCorrupt = normalized.trim().length < 20;
+        const khmerCount = (normalized.match(/[\u1780-\u17FF]/g) || []).length;
+        const isCorrupt = this.isCorruptedGlyphText(normalized);
+        const isScannedOrCorrupt = normalized.trim().length < 20 || isCorrupt || (khmerCount < 10 && !/^[a-zA-Z0-9\s.,!?'"()\-:;—\n\r]+$/.test(normalized));
 
         pages.push({
           pageNumber: pageNum,
-          text: normalized,
-          charCount: normalized.length,
+          text: isCorrupt ? '' : normalized,
+          charCount: isCorrupt ? 0 : normalized.length,
           isScanned: isScannedOrCorrupt
         });
 
-        return normalized;
+        return isCorrupt ? '' : normalized;
       });
     };
 
@@ -155,6 +157,30 @@ class PdfService {
   }
 
   /**
+   * Check if a string is corrupted legacy font glyphs (IPA, Latin Extended-B, Cyrillic hacks)
+   */
+  isCorruptedGlyphText(text) {
+    if (!text || typeof text !== 'string') return false;
+    const corruptMatches = text.match(/[\u0180-\u02AF\u1D00-\u1DBF\u0400-\u04FF]/g) || [];
+    const khmerMatches = text.match(/[\u1780-\u17FF]/g) || [];
+    if (corruptMatches.length > 2 && khmerMatches.length < 5) return true;
+    if (khmerMatches.length === 0 && corruptMatches.length > 1) return true;
+    if (text.length > 15 && (corruptMatches.length / text.length) > 0.08) return true;
+    return false;
+  }
+
+  /**
+   * Remove corrupted glyph runs from text
+   */
+  sanitizeCorruptGlyphs(text) {
+    if (!text || typeof text !== 'string') return '';
+    return text
+      .replace(/[\u0180-\u02AF\u1D00-\u1DBF\u0400-\u04FF]+/g, ' ')
+      .replace(/[ \t]{2,}/g, ' ')
+      .trim();
+  }
+
+  /**
    * Normalize and fix common Khmer Unicode extraction issues
    */
   normalizeKhmerText(text) {
@@ -165,6 +191,8 @@ class PdfService {
       .normalize('NFC')
       // Remove zero-width non-breaking spaces and BOM
       .replace(/[\uFEFF\u200B\u200E\u200F]/g, '')
+      // Strip corrupted legacy glyph runs
+      .replace(/[\u0180-\u02AF\u1D00-\u1DBF\u0400-\u04FF]{2,}/g, ' ')
       // Fix broken Coeng (Subscript consonant indicator \u17D2 followed by spaces)
       .replace(/\u17D2\s+([\u1780-\u17A2])/g, '\u17D2$1')
       // Fix vowel split from consonant
@@ -185,7 +213,7 @@ class PdfService {
 
     for (const page of pages) {
       const pageText = page.text.trim();
-      if (!pageText) continue;
+      if (!pageText || this.isCorruptedGlyphText(pageText)) continue;
 
       // If page is short, keep as single chunk
       if (pageText.length <= targetChunkChars) {
@@ -203,20 +231,24 @@ class PdfService {
       let currentChunkText = '';
 
       for (const seg of segments) {
+        if (this.isCorruptedGlyphText(seg)) continue;
+
         if ((currentChunkText + seg).length > targetChunkChars && currentChunkText.length > 200) {
-          chunks.push({
-            chunkId: `chunk_${chunkCounter++}`,
-            pageNumber: page.pageNumber,
-            text: currentChunkText.trim(),
-            charCount: currentChunkText.trim().length
-          });
+          if (!this.isCorruptedGlyphText(currentChunkText)) {
+            chunks.push({
+              chunkId: `chunk_${chunkCounter++}`,
+              pageNumber: page.pageNumber,
+              text: currentChunkText.trim(),
+              charCount: currentChunkText.trim().length
+            });
+          }
           currentChunkText = seg;
         } else {
           currentChunkText += seg;
         }
       }
 
-      if (currentChunkText.trim().length > 0) {
+      if (currentChunkText.trim().length > 0 && !this.isCorruptedGlyphText(currentChunkText)) {
         chunks.push({
           chunkId: `chunk_${chunkCounter++}`,
           pageNumber: page.pageNumber,

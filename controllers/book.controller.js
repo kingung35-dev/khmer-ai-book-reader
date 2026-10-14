@@ -243,8 +243,11 @@ class BookController {
       }
 
       const pageObj = metadata.pages?.find(p => p.pageNumber === targetPage);
-      const hasContent = finalText && finalText.trim().length >= 15;
-      const needsOcr = !hasContent && (pageObj?.isScanned || !finalText);
+      const isCorrupt = pdfService.isCorruptedGlyphText(finalText);
+      const khmerCount = (finalText.match(/[\u1780-\u17FF]/g) || []).length;
+      const isCleanEnglish = /^[a-zA-Z0-9\s.,!?'"()\-:;—\n\r/«»]+$/.test(finalText) && (finalText.match(/[a-zA-Z]/g) || []).length >= 40;
+      const hasValidContent = finalText && !isCorrupt && (khmerCount >= 15 || isCleanEnglish);
+      const needsOcr = !hasValidContent && (pageObj?.isScanned || isCorrupt || !finalText || khmerCount < 15);
 
       let isOcrRun = false;
 
@@ -257,8 +260,8 @@ class BookController {
               isOcrRun = true;
               finalText = ocrText.trim();
 
-              // Update cached metadata and fast pageTexts map
-              metadata.chunks = (metadata.chunks || []).filter(c => c.pageNumber !== targetPage);
+              // Update cached metadata and fast pageTexts map with clean OCR
+              metadata.chunks = (metadata.chunks || []).filter(c => c.pageNumber !== targetPage && !pdfService.isCorruptedGlyphText(c.text));
               metadata.chunks.push({
                 chunkId: `ocr_p${targetPage}`,
                 pageNumber: targetPage,
@@ -275,13 +278,13 @@ class BookController {
           console.warn(`[BookController] OCR fallback failed for page ${targetPage}:`, ocrErr.message);
         }
 
-        // Cache page text result (even if blank) to avoid re-running OCR repeatedly
+        // Cache page text result to avoid re-running OCR repeatedly
         metadata.pageTexts[targetPage] = finalText;
         pdfService.saveMetadata(id, metadata);
       }
 
-      // Normalize Khmer text (repair coengs, remove zero-width spaces, normalize whitespace)
-      finalText = pdfService.normalizeKhmerText(finalText);
+      // Normalize Khmer text and sanitize any residual corrupt glyphs
+      finalText = pdfService.sanitizeCorruptGlyphs(pdfService.normalizeKhmerText(finalText));
 
       res.json({
         success: true,

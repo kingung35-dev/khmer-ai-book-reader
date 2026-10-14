@@ -252,6 +252,11 @@ class AIService {
       langInstruction = 'គោលការណ៍ភាសាដាច់ខាត៖ ត្រូវឆ្លើយតប បកស្រាយ ពន្យល់ និងសង្ខេបជា «ភាសាខ្មែរ» សុទ្ធសាធ ១០០% ឲ្យបានក្បោះក្បាយ ពិរោះ រលូន មានរបៀបរៀបរយ និងត្រឹមត្រូវតាមក្បួនវេយ្យាករណ៍ខេមរភាសា ដោយដាច់ខាតមិនឆ្លើយតប ឬបកប្រែជាភាសាអង់គ្លេសឡើយ (រាល់ពាក្យបច្ចេកទេសបរទេសត្រូវបកប្រែ និងពន្យល់ជាភាសាខ្មែរ) ដោយភ្ជាប់លេខទំព័រយោង [ទំព័រ X] សម្រាប់ផ្ទៀងផ្ទាត់។';
     }
 
+    const cleanContext = (contextText || '')
+      .replace(/[\u0180-\u02AF\u1D00-\u1DBF\u0400-\u04FF]+/g, ' ')
+      .replace(/[ \t]{2,}/g, ' ')
+      .trim();
+
     const quizInstruction = isQuizQuery
       ? `\n៦. ដោយសារសំណួរទាក់ទងនឹងការបង្កើត Quiz ឬលំហាត់៖
 - ប្រសិនបើអ្នកប្រើប្រាស់ស្នើសុំចំនួនច្រើន (ដូចជា ៥០ ឬ ១០០ សំណួរ)៖ ដោយសារទំហំកំណត់នៃការឆ្លើយតប សូមបង្កើតកម្រងលំហាត់ Quiz ពហុជ្រើសរើស (MCQ) សំខាន់ៗបំផុតឱ្យបានយ៉ាងតិច ១៥ ទៅ ២០ សំណួរគត់ (សំណួរទី ១ ដល់ទី ២០) ដោយគ្របដណ្តប់លើគ្រប់មេរៀន/ទំព័រដែលបានដកស្រង់។
@@ -279,7 +284,7 @@ class AIService {
 ៥. ${langInstruction}${quizInstruction}${overviewInstruction}
 
 --- [ខ្លឹមសារដកស្រង់ចេញពីសៀវភៅ / PASSAGES FROM PDF] ---
-${contextText}
+${cleanContext}
 --- [ចប់ខ្លឹមសារដកស្រង់] ---
 
 សំណួររបស់អ្នកប្រើប្រាស់ (User Question):
@@ -293,7 +298,12 @@ ${contextText}
    * Construct Action prompt
    */
   buildActionPrompt({ action, text, bookTitle, pageNumber, targetLang }) {
-    const isSourceKhmer = /[\u1780-\u17FF]/.test(text || '');
+    const cleanText = (text || '')
+      .replace(/[\u0180-\u02AF\u1D00-\u1DBF\u0400-\u04FF]+/g, ' ')
+      .replace(/[ \t]{2,}/g, ' ')
+      .trim();
+
+    const isSourceKhmer = /[\u1780-\u17FF]/.test(cleanText || '');
 
     const langInstruction = targetLang === 'en'
       ? 'Respond strictly in English.'

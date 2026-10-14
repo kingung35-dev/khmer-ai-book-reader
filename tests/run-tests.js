@@ -267,6 +267,28 @@ async function runTests() {
     }
   });
 
+  // 11. Corrupted Legacy Glyph Detection and 100% Khmer Translation Tests
+  test('Corrupted Glyph Detection - accurately detects and filters corrupted legacy font encodings', () => {
+    const corruptSample = `«rjL?JofYnkE 'S jL?EY LBuzQlỹY 13 ъ афуЛrYf (TY LasqɔErr Ф AtzQlzғ5 D Akb+RarR(nYa+KY Bu Yf (YRE₂ D l E|| D rkbÖ»`;
+    const cleanKhmerSample = 'មេរៀនទី១ សញ្ញាណទូទៅចិត្តវិទ្យា។ វត្ថុបំណង៖ ក្រោយពីសិក្សាមេរៀនចប់ គរុសិស្សនឹងប្រាប់បានពីបញ្ញត្តិចិត្តវិទ្យា។';
+    assert(pdfService.isCorruptedGlyphText(corruptSample), 'Must flag corrupted legacy font stream as corrupted');
+    assert(!pdfService.isCorruptedGlyphText(cleanKhmerSample), 'Must NOT flag clean Khmer text as corrupted');
+    const sanitized = pdfService.sanitizeCorruptGlyphs(corruptSample);
+    assert(!pdfService.isCorruptedGlyphText(sanitized), 'Sanitized string must no longer contain corrupt glyph blocks');
+  });
+
+  test('Khmer Translation Quality - verifies prompt mandates 100% Khmer without corrupt glyphs across all pages and chapters', () => {
+    const actionPrompt = aiService.buildActionPrompt({
+      action: 'translate',
+      text: 'Sample text to translate from chapter 1',
+      bookTitle: 'ចិត្តវិទ្យា',
+      pageNumber: '1-184'
+    });
+    assert(actionPrompt.includes('១០០%'), 'Must mandate 100% Khmer translation');
+    assert(actionPrompt.includes('គ្រប់ទំព័រ') || actionPrompt.includes('ភាសាខ្មែរ'), 'Must mention Khmer language');
+    assert(!actionPrompt.includes('«rjL?'), 'Must never contain corrupted glyph samples');
+  });
+
   console.log(`\n========================================`);
   console.log(`🎯 Test Results: ${passed} Passed, ${failed} Failed`);
   console.log(`========================================\n`);

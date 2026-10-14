@@ -49,12 +49,21 @@ class RetrievalService {
    * Check if a chunk text contains readable Khmer or English rather than corrupted font glyphs
    */
   isCleanText(text) {
-    if (!text || text.trim().length < 20) return false;
-    const hasKhmer = /[\u1780-\u17FF]/.test(text);
-    const isCleanEnglish = /^[a-zA-Z0-9\s.,!?'"()\-:;—\n\r]+$/.test(text);
-    const hasCorrupt = /[\u0250-\u02AF\u1D00-\u1DBF\u0180-\u024F]/.test(text);
-    if (hasCorrupt && !hasKhmer) return false;
-    return hasKhmer || isCleanEnglish;
+    if (!text || text.trim().length < 15) return false;
+    const corruptMatches = text.match(/[\u0180-\u02AF\u1D00-\u1DBF\u0400-\u04FF]/g) || [];
+    const khmerMatches = text.match(/[\u1780-\u17FF]/g) || [];
+    const latinMatches = text.match(/[a-zA-Z]/g) || [];
+
+    // If corrupted glyphs exist and low Khmer
+    if (corruptMatches.length > 2 && khmerMatches.length < 5) return false;
+    if (khmerMatches.length === 0 && corruptMatches.length > 1) return false;
+    if (text.length > 15 && (corruptMatches.length / text.length) > 0.08) return false;
+
+    // Must be either legitimate Khmer or clean English
+    const hasSufficientKhmer = khmerMatches.length >= 5;
+    const isCleanEnglish = latinMatches.length >= 10 && /^[a-zA-Z0-9\s.,!?'"()\-:;—\n\r/«»]+$/.test(text);
+
+    return hasSufficientKhmer || isCleanEnglish;
   }
 
   /**
@@ -286,7 +295,11 @@ class RetrievalService {
     }
 
     return retrievedChunks.map((chunk, idx) => {
-      return `--- [ឯកសារយោងទំព័រទី ${chunk.pageNumber} / Page ${chunk.pageNumber}] ---\n${chunk.text.trim()}`;
+      const cleanChunkText = chunk.text
+        .replace(/[\u0180-\u02AF\u1D00-\u1DBF\u0400-\u04FF]+/g, ' ')
+        .replace(/[ \t]{2,}/g, ' ')
+        .trim();
+      return `--- [ឯកសារយោងទំព័រទី ${chunk.pageNumber} / Page ${chunk.pageNumber}] ---\n${cleanChunkText}`;
     }).join('\n\n');
   }
 }

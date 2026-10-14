@@ -76,6 +76,19 @@ class BookAudioPlayer {
   }
 
   /**
+   * Check if text is corrupted legacy font glyphs (IPA, Latin Extended-B, Cyrillic hacks)
+   */
+  isCorruptedGlyphText(text) {
+    if (!text || typeof text !== 'string') return false;
+    const corruptMatches = text.match(/[\u0180-\u02AF\u1D00-\u1DBF\u0400-\u04FF]/g) || [];
+    const khmerMatches = text.match(/[\u1780-\u17FF]/g) || [];
+    if (corruptMatches.length > 2 && khmerMatches.length < 5) return true;
+    if (khmerMatches.length === 0 && corruptMatches.length > 1) return true;
+    if (text.length > 15 && (corruptMatches.length / text.length) > 0.08) return true;
+    return false;
+  }
+
+  /**
    * Split original book text into natural Khmer sentences (max 130 chars for smooth TTS)
    */
   splitKhmerSentences(rawText) {
@@ -86,6 +99,7 @@ class BookAudioPlayer {
       .replace(/```[\s\S]*?```/g, '')
       .replace(/[*_#`>~]/g, '')
       .replace(/[\uFEFF\u200B\u200E\u200F]/g, '')
+      .replace(/[\u0180-\u02AF\u1D00-\u1DBF\u0400-\u04FF]{2,}/g, ' ')
       .replace(/\r\n/g, '\n')
       .trim();
 
@@ -96,22 +110,30 @@ class BookAudioPlayer {
     for (const part of rawParts) {
       const s = part.trim();
       if (!s || s.length === 0) continue;
+      // Filter out any corrupted sentence
+      if (this.isCorruptedGlyphText(s)) continue;
 
-      if (s.length <= 130) {
-        chunks.push(s);
+      const cleanSentence = s.replace(/[\u0180-\u02AF\u1D00-\u1DBF\u0400-\u04FF]+/g, ' ').replace(/[ \t]{2,}/g, ' ').trim();
+      if (!cleanSentence || this.isCorruptedGlyphText(cleanSentence)) continue;
+
+      if (cleanSentence.length <= 130) {
+        chunks.push(cleanSentence);
       } else {
         // Sub-split longer sentences on commas, semicolons, colons, or whitespace
-        const subParts = s.split(/(?<=[,;:\s])/);
+        const subParts = cleanSentence.split(/(?<=[,;:\s])/);
         let curr = '';
         for (const piece of subParts) {
+          if (this.isCorruptedGlyphText(piece)) continue;
           if ((curr + piece).length > 130 && curr.length > 0) {
-            chunks.push(curr.trim());
+            if (!this.isCorruptedGlyphText(curr.trim())) {
+              chunks.push(curr.trim());
+            }
             curr = piece;
           } else {
             curr += piece;
           }
         }
-        if (curr.trim().length > 0) {
+        if (curr.trim().length > 0 && !this.isCorruptedGlyphText(curr.trim())) {
           chunks.push(curr.trim());
         }
       }
@@ -177,7 +199,7 @@ class BookAudioPlayer {
       pageText = this.pageTextCache[cacheKey];
     }
 
-    // 2. Fast Client-side PDF.js extraction (takes ~5-15ms, skips slow server OCR)
+    // 2. Fast Client-side PDF.js extraction (only if text is clean Khmer/English, not corrupted legacy fonts)
     if (!pageText && window.pdfReader?.pdfDoc) {
       try {
         const page = await window.pdfReader.pdfDoc.getPage(this.currentPage);
@@ -186,9 +208,13 @@ class BookAudioPlayer {
           const items = textContent.items || [];
           if (items.length > 0) {
             const rawClientText = items.map(s => s.str).join(' ').trim();
-            // If page has real content, use it immediately!
-            if (rawClientText.length >= 15) {
-              pageText = rawClientText;
+            const isCorrupt = this.isCorruptedGlyphText(rawClientText);
+            const kmCount = (rawClientText.match(/[\u1780-\u17FF]/g) || []).length;
+            const isCleanEng = /^[a-zA-Z0-9\s.,!?'"()\-:;—\n\r/«»]+$/.test(rawClientText) && (rawClientText.match(/[a-zA-Z]/g) || []).length >= 40;
+
+            // ONLY use client text if it is NOT corrupted legacy fonts and has sufficient valid content
+            if (rawClientText.length >= 15 && !isCorrupt && (kmCount >= 15 || isCleanEng)) {
+              pageText = rawClientText.replace(/[\u0180-\u02AF\u1D00-\u1DBF\u0400-\u04FF]+/g, ' ').trim();
               this.pageTextCache[cacheKey] = pageText;
             }
           }
@@ -198,8 +224,8 @@ class BookAudioPlayer {
       }
     }
 
-    // 3. Fallback to server endpoint with 7s timeout (only for pure scanned pages)
-    if (!pageText || pageText.trim().length < 10) {
+    // 3. Fallback to server endpoint (with OCR for legacy/corrupted pages)
+    if (!pageText || pageText.trim().length < 10 || this.isCorruptedGlyphText(pageText)) {
       if (this.statusTextEl) {
         this.statusTextEl.textContent = `កំពុងស្រង់អក្សរពី Server (ទំព័រទី ${this.currentPage})...`;
       }

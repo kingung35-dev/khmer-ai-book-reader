@@ -27,10 +27,10 @@ function findBookFilePath(bookId) {
 
 function textNeedsOcr(text) {
   if (!text || text.trim().length < 20) return true;
-  const hasKhmer = /[\u1780-\u17FF]/.test(text);
-  const isPureEnglish = /^[a-zA-Z0-9\s.,!?'"()\-:;—\n\r]+$/.test(text);
-  const hasCorruptedGlyphs = /[\u0250-\u02AF\u1D00-\u1DBF\u0180-\u024F\u0080-\u00FF]/.test(text);
-  return (!hasKhmer && !isPureEnglish) || hasCorruptedGlyphs;
+  if (pdfService.isCorruptedGlyphText(text)) return true;
+  const khmerCount = (text.match(/[\u1780-\u17FF]/g) || []).length;
+  const isPureEnglish = /^[a-zA-Z0-9\s.,!?'"()\-:;—\n\r/«»]+$/.test(text) && (text.match(/[a-zA-Z]/g) || []).length >= 30;
+  return khmerCount < 15 && !isPureEnglish;
 }
 
 class AIController {
@@ -63,6 +63,9 @@ class AIController {
           error: 'មិនទាន់មានទិន្នន័យអត្ថបទសម្រាប់សៀវភៅនេះនៅឡើយទេ'
         });
       }
+
+      // Filter out any corrupted chunks so AI never receives broken legacy font data
+      metadata.chunks = metadata.chunks.filter(c => !pdfService.isCorruptedGlyphText(c.text));
 
       // Check if user specifically requested a page range, whole book, or single page
       let pageRange = retrievalService.extractMentionedRange(question);
@@ -104,6 +107,8 @@ class AIController {
                   pageObj.charCount = ocrText.length;
                   pageObj.isScanned = false;
                 }
+                if (!metadata.pageTexts) metadata.pageTexts = {};
+                metadata.pageTexts[pageNum] = ocrText;
                 pdfService.saveMetadata(bookId, metadata);
                 console.log(`[AIController] On-demand OCR complete for page ${pageNum} (${ocrText.length} chars).`);
               }
@@ -155,30 +160,34 @@ class AIController {
         bookTitle = metadata?.title || '';
 
         if (!actionText && metadata?.chunks) {
+          // Filter clean chunks only
+          const allCleanChunks = metadata.chunks.filter(c => retrievalService.isCleanText(c.text) && !pdfService.isCorruptedGlyphText(c.text));
+
           if (startPage && endPage) {
             const p1 = parseInt(startPage, 10);
             const p2 = parseInt(endPage, 10);
             const s = Math.min(p1, p2);
             const e = Math.max(p1, p2);
-            const rangeChunks = metadata.chunks.filter(c => c.pageNumber >= s && c.pageNumber <= e);
-            const cleanChunks = rangeChunks.filter(c => retrievalService.isCleanText(c.text));
-            const pool = cleanChunks.length > 0 ? cleanChunks : rangeChunks;
-            actionText = pool.slice(0, 15).map(c => `[ទំព័រទី ${c.pageNumber}]\n${c.text.trim()}`).join('\n\n');
+            const rangeChunks = allCleanChunks.filter(c => c.pageNumber >= s && c.pageNumber <= e);
+            actionText = rangeChunks.slice(0, 15).map(c => `[ទំព័រទី ${c.pageNumber}]\n${c.text.trim()}`).join('\n\n');
             displayPage = `${s}-${e}`;
           } else if (pageNumber) {
             const pageNum = parseInt(pageNumber, 10);
-            const pageChunks = metadata.chunks.filter(c => c.pageNumber === pageNum);
+            const pageChunks = allCleanChunks.filter(c => c.pageNumber === pageNum);
             if (pageChunks.length > 0) {
               actionText = pageChunks.map(c => c.text).join('\n\n');
+            } else if (metadata.pageTexts && metadata.pageTexts[pageNum]) {
+              actionText = metadata.pageTexts[pageNum];
             }
           } else if (scope === 'book') {
-            const cleanChunks = metadata.chunks.filter(c => retrievalService.isCleanText(c.text));
-            const pool = cleanChunks.length > 0 ? cleanChunks : metadata.chunks;
-            actionText = pool.slice(0, 15).map(c => `[ទំព័រទី ${c.pageNumber}]\n${c.text.trim()}`).join('\n\n');
+            actionText = allCleanChunks.slice(0, 15).map(c => `[ទំព័រទី ${c.pageNumber}]\n${c.text.trim()}`).join('\n\n');
             displayPage = 'សៀវភៅទាំងមូល';
           }
         }
       }
+
+      // Sanitize any corrupt glyphs
+      actionText = pdfService.sanitizeCorruptGlyphs(actionText);
 
       if (!actionText || actionText.length === 0) {
         return res.status(400).json({ success: false, error: 'សូមជ្រើសរើសអត្ថបទ ឬទំព័រជាមុនសិន (Please select text or pages)' });
