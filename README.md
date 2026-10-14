@@ -119,7 +119,18 @@ npm install
    ចុចលើរូបកង់ធ្មេញ **⚙️ Settings** នៅខាងស្តាំដៃខាងលើ រួចបញ្ចូល Key និងចុចសាកល្បង **«សាកល្បងតភ្ជាប់ (Test)»**។
    *(អ្នកអាចបង្កើត API Key ដោយឥតគិតថ្លៃពីរ [Google AI Studio](https://aistudio.google.com/))*
 
-### ៤. ដំណើរការកម្មវិធី
+### ៤. ដំណើរការកម្មវិធី (1-Click Run)
+
+* **លើ Windows**:
+  - **ចុចពីរដង (Double-Click)** លើឯកសារ 👉 **`start.bat`** (កម្មវិធីនឹងបើក Browser ទៅកាន់ `http://localhost:3000` ស្វ័យប្រវត្តិ)
+  - សម្រាប់ Update: **ចុចពីរដង** លើ 👉 **`update.bat`**
+  - មើលការណែនាំលម្អិតក្នុង៖ [WINDOWS_INSTALL_GUIDE.md](file:///Users/sythatom/Desktop/កម្មវិធីអានសៀវភៅ/WINDOWS_INSTALL_GUIDE.md)
+
+* **លើ macOS**:
+  - **ចុចពីរដង (Double-Click)** លើឯកសារ 👉 **`start.command`**
+  - សម្រាប់ Update: **ចុចពីរដង** លើ 👉 **`update.command`**
+
+* **ឬតាមរយៈ Terminal / Command Prompt**:
 ```bash
 # ដំណើរការ Server
 npm start

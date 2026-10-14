@@ -24,17 +24,27 @@ class OcrService {
 
   resolveBinary(configuredPath, name) {
     if (configuredPath && fs.existsSync(configuredPath)) return configuredPath;
+    const isWin = process.platform === 'win32';
+    const exeName = isWin ? `${name}.exe` : name;
     const candidates = [
       configuredPath,
+      // Windows standard installation paths
+      isWin && `C:\\Program Files\\Tesseract-OCR\\${exeName}`,
+      isWin && `C:\\Program Files (x86)\\Tesseract-OCR\\${exeName}`,
+      isWin && `C:\\Program Files\\poppler\\bin\\${exeName}`,
+      isWin && `C:\\Program Files\\poppler-utils\\bin\\${exeName}`,
+      isWin && `C:\\poppler\\bin\\${exeName}`,
+      // Mac / Linux standard paths
       `/opt/homebrew/bin/${name}`,
       `/usr/local/bin/${name}`,
       `/usr/bin/${name}`,
-      name
+      name,
+      exeName
     ].filter(Boolean);
     for (const p of candidates) {
       if (fs.existsSync(p)) return p;
     }
-    return configuredPath || name;
+    return configuredPath || exeName;
   }
 
   /**
@@ -84,8 +94,9 @@ class OcrService {
 
       const imgPath = path.join(TEMP_DIR, generatedImg);
 
-      // 2. Run Tesseract OCR with Khmer and English language models
-      const ocrCmd = `"${this.tesseractPath}" "${imgPath}" stdout -l ${this.languages} --psm 6 2>/dev/null`;
+      // 2. Run Tesseract OCR with Khmer and English language models (cross-platform stderr redirect)
+      const nullRedirect = process.platform === 'win32' ? '2>nul' : '2>/dev/null';
+      const ocrCmd = `"${this.tesseractPath}" "${imgPath}" stdout -l ${this.languages} --psm 6 ${nullRedirect}`;
       const { stdout } = await execPromise(ocrCmd);
 
       // Clean up temporary image
