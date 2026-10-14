@@ -1,7 +1,7 @@
 {
-  "version": "2.3.8",
-  "build": "20261014-2019",
-  "updatedAt": "2026-10-14T13:19:29.318Z",
-  "title": "Khmer AI Book Reader v2.3.8",
-  "changelog": "កំណែ v2.3.8: បន្ថែមការគាំទ្រប្រព័ន្ធប្រតិបត្តិការ Windows (start.bat & update.bat) និងការណែនាំ WINDOWS_INSTALL_GUIDE.md"
+  "version": "2.3.9",
+  "build": "20261014-2021",
+  "updatedAt": "2026-10-14T13:21:05.897Z",
+  "title": "Khmer AI Book Reader v2.3.9",
+  "changelog": "កំណែ v2.3.9: Update: 2026-10-14 20:21:05"
 }

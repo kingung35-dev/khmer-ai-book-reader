@@ -4,7 +4,7 @@
  * keyboard shortcuts, and toast notifications.
  */
 
-const CURRENT_APP_VERSION = '2.3.8';
+const CURRENT_APP_VERSION = '2.3.9';
 
 document.addEventListener('DOMContentLoaded', () => {
   initTheme();

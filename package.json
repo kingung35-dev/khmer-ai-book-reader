@@ -1,6 +1,6 @@
 {
   "name": "khmer-ai-book-reader",
-  "version": "2.3.8",
+  "version": "2.3.9",
   "description": "Khmer AI Book Reader — កម្មវិធីអានសៀវភៅ PDF ជាភាសាខ្មែរ ជាមួយបច្ចេកវិទ្យា AI Google Gemini",
   "main": "server.js",
   "type": "commonjs",
