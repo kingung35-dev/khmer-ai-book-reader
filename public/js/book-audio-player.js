@@ -224,14 +224,17 @@ class BookAudioPlayer {
       }
     }
 
-    // 3. Fallback to server endpoint (with OCR for legacy/corrupted pages)
+    // 3. Fallback to server endpoint (with automatic Khmer OCR for scanned/legacy pages)
     if (!pageText || pageText.trim().length < 10 || this.isCorruptedGlyphText(pageText)) {
       if (this.statusTextEl) {
-        this.statusTextEl.textContent = `កំពុងស្រង់អក្សរពី Server (ទំព័រទី ${this.currentPage})...`;
+        this.statusTextEl.textContent = `កំពុងស្រង់អក្សរខ្មែរ (OCR)...`;
+      }
+      if (this.currentSentenceEl) {
+        this.currentSentenceEl.innerHTML = `<em>កំពុងស្រង់ខ្លឹមសារអត្ថបទខ្មែរពីទំព័រទី ${this.currentPage} ដោយស្វ័យប្រវត្តិ សូមរង់ចាំបន្តិច...</em>`;
       }
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 7000);
+        const timeoutId = setTimeout(() => controller.abort(), 35000);
 
         const res = await fetch(`/api/books/${encodeURIComponent(bookId)}/page/${this.currentPage}/text`, {
           signal: controller.signal
@@ -569,9 +572,13 @@ class BookAudioPlayer {
           const items = textContent.items || [];
           if (items.length > 0) {
             const rawText = items.map(s => s.str).join(' ').trim();
-            if (rawText.length >= 15) {
+            const isCorrupt = this.isCorruptedGlyphText(rawText);
+            const kmCount = (rawText.match(/[\u1780-\u17FF]/g) || []).length;
+            const isCleanEng = /^[a-zA-Z0-9\s.,!?'"()\-:;—\n\r/«»]+$/.test(rawText) && (rawText.match(/[a-zA-Z]/g) || []).length >= 40;
+
+            if (rawText.length >= 15 && !isCorrupt && (kmCount >= 15 || isCleanEng)) {
               if (!this.pageTextCache) this.pageTextCache = {};
-              this.pageTextCache[cacheKey] = rawText;
+              this.pageTextCache[cacheKey] = rawText.replace(/[\u0180-\u02AF\u1D00-\u1DBF\u0400-\u04FF]+/g, ' ').trim();
             }
           }
         }

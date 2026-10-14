@@ -1,7 +1,7 @@
 {
-  "version": "2.3.6",
-  "build": "20261014-2001",
-  "updatedAt": "2026-10-14T13:01:16.982Z",
-  "title": "Khmer AI Book Reader v2.3.6",
-  "changelog": "កំណែ v2.3.6: Update: 2026-10-14 20:01:16"
+  "version": "2.3.7",
+  "build": "20261014-2013",
+  "updatedAt": "2026-10-14T13:13:29.085Z",
+  "title": "Khmer AI Book Reader v2.3.7",
+  "changelog": "កំណែ v2.3.7: បង្កើន OCR timeout 35s, pre-cache ទំព័រចុងក្រោយ ១៨១ និងទំព័រគន្លឹះ ធានាការអានដល់ចប់"
 }
